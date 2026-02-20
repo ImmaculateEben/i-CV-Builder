@@ -84,33 +84,33 @@ export default function EditorPage() {
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
             <div>
-              <h1 className="text-3xl font-bold">CV Editor</h1>
-              <p className="text-muted-foreground">Fill in your information to create your CV</p>
+              <h1 className="text-2xl sm:text-3xl font-bold">CV Editor</h1>
+              <p className="text-muted-foreground text-sm sm:text-base">Fill in your information to create your CV</p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowTemplateSelector(true)}>
-                <Palette className="h-4 w-4 mr-2" />
-                Templates
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowTemplateSelector(true)}>
+                <Palette className="h-4 w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Templates</span>
               </Button>
-              <Button variant="outline" onClick={() => setShowPreview(true)}>
-                <Eye className="h-4 w-4 mr-2" />
-                Preview
+              <Button variant="outline" size="sm" onClick={() => setShowPreview(true)}>
+                <Eye className="h-4 w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Preview</span>
               </Button>
-              <PDFDownloadButton />
+              <PDFDownloadButton size="sm" />
             </div>
           </div>
 
           {/* Progress Steps */}
           <div className="mb-8 overflow-x-auto">
-            <div className="flex items-center gap-2 min-w-max pb-2">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-max pb-2">
               {steps.map((step, index) => (
                 <button
                   key={step.id}
                   onClick={() => setCurrentStep(index)}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
+                    "flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg transition-colors whitespace-nowrap",
                     index === currentStep
                       ? "bg-primary text-primary-foreground"
                       : index < currentStep
@@ -118,8 +118,8 @@ export default function EditorPage() {
                       : "bg-muted text-muted-foreground"
                   )}
                 >
-                  <step.icon className="h-4 w-4" />
-                  <span className="text-sm font-medium hidden sm:inline">{step.label}</span>
+                  <step.icon className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="text-xs sm:text-sm font-medium hidden xs:inline">{step.label}</span>
                 </button>
               ))}
             </div>
@@ -668,14 +668,14 @@ export default function EditorPage() {
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw]">
           <DialogHeader>
             <DialogTitle>CV Preview</DialogTitle>
             <DialogDescription>
               This is how your CV will look when exported to PDF
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-4">
+          <div className="mt-4 overflow-x-auto">
             {currentTemplate === "modern" && <ModernTemplate cv={currentCV} />}
             {currentTemplate === "professional" && <ProfessionalTemplate cv={currentCV} />}
             {currentTemplate === "creative" && <CreativeTemplate cv={currentCV} />}
@@ -686,7 +686,7 @@ export default function EditorPage() {
 
       {/* Template Selector Dialog */}
       <Dialog open={showTemplateSelector} onOpenChange={setShowTemplateSelector}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw]">
           <DialogHeader>
             <DialogTitle>Choose a Template</DialogTitle>
             <DialogDescription>

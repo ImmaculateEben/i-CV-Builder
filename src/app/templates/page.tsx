@@ -46,10 +46,10 @@ export default function TemplatesPage() {
       
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="py-16 bg-gradient-to-b from-background to-muted">
+        <section className="py-12 sm:py-16 bg-gradient-to-b from-background to-muted">
           <div className="container mx-auto px-4 text-center">
-            <h1 className="text-4xl font-bold mb-4">Choose Your Perfect Template</h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">Choose Your Perfect Template</h1>
+            <p className="text-base sm:text-xl text-muted-foreground max-w-2xl mx-auto">
               Browse our collection of professionally designed CV templates. 
               All templates are optimized for ATS and ready to use.
             </p>
@@ -57,9 +57,9 @@ export default function TemplatesPage() {
         </section>
 
         {/* Templates Grid */}
-        <section className="py-16">
+        <section className="py-12 sm:py-16">
           <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {templates.map((template) => {
                 const Icon = templateIcons[template.id]
                 

@@ -12,13 +12,13 @@ export default function HomePage() {
       
       {/* Hero Section */}
       <main className="flex-1">
-        <section className="relative py-20 lg:py-32 overflow-hidden">
+        <section className="relative py-16 lg:py-32 overflow-hidden">
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-4xl lg:text-6xl font-bold mb-6">
+              <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold mb-4 sm:mb-6">
                 Create Professional CVs in Minutes
               </h1>
-              <p className="text-xl text-muted-foreground mb-8">
+              <p className="text-lg sm:text-xl text-muted-foreground mb-6 sm:mb-8">
                 Build stunning resumes with our easy-to-use CV builder. 
                 Choose from beautiful templates, customize your content, and download as PDF.
               </p>
@@ -45,13 +45,13 @@ export default function HomePage() {
         </section>
 
         {/* Features Section */}
-        <section className="py-16 bg-muted/50">
+        <section className="py-12 sm:py-16 bg-muted/50">
           <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">
               Everything You Need to Create the Perfect CV
             </h2>
             
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               <Card>
                 <CardContent className="pt-6">
                   <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">

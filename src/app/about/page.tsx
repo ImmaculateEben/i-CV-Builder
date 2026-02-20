@@ -17,12 +17,12 @@ export default function AboutPage() {
       
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="py-20 bg-gradient-to-b from-background to-muted">
+        <section className="py-12 sm:py-20 bg-gradient-to-b from-background to-muted">
           <div className="container mx-auto px-4 text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6">
               Build Your Professional CV in Minutes
             </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
+            <p className="text-base sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-8">
               CV Builder helps job seekers create professional, ATS-friendly CVs 
               that land interviews. No design skills required.
             </p>
@@ -38,9 +38,9 @@ export default function AboutPage() {
         </section>
 
         {/* Stats Section */}
-        <section className="py-16 bg-primary text-primary-foreground">
+        <section className="py-10 sm:py-16 bg-primary text-primary-foreground">
           <div className="container mx-auto px-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 text-center">
               <div>
                 <div className="text-4xl font-bold mb-2">10,000+</div>
                 <div className="text-primary-foreground/80">CVs Created</div>
@@ -62,10 +62,10 @@ export default function AboutPage() {
         </section>
 
         {/* Features Section */}
-        <section className="py-20">
+        <section className="py-12 sm:py-20">
           <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-12">Why Choose CV Builder?</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">Why Choose CV Builder?</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
               <div className="p-6 rounded-xl border bg-card">
                 <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center mb-4">
                   <FileText className="h-6 w-6 text-blue-600" />
@@ -136,9 +136,9 @@ export default function AboutPage() {
         </section>
 
         {/* How It Works */}
-        <section className="py-20 bg-muted">
+        <section className="py-12 sm:py-20 bg-muted">
           <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">How It Works</h2>
             <div className="max-w-3xl mx-auto">
               <div className="flex gap-4 mb-8">
                 <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold flex-shrink-0">
@@ -196,10 +196,10 @@ export default function AboutPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20">
+        <section className="py-12 sm:py-20">
           <div className="container mx-auto px-4 text-center">
-            <h2 className="text-3xl font-bold mb-4">Ready to Create Your CV?</h2>
-            <p className="text-xl text-muted-foreground mb-8 max-w-xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-3 sm:mb-4">Ready to Create Your CV?</h2>
+            <p className="text-base sm:text-xl text-muted-foreground mb-6 sm:mb-8 max-w-xl mx-auto">
               Start building your professional CV today and land your dream job.
             </p>
             <Link href="/editor">
