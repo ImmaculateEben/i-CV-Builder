@@ -89,7 +89,7 @@ export default function EditorPage() {
               <h1 className="text-2xl sm:text-3xl font-bold">CV Editor</h1>
               <p className="text-muted-foreground text-sm sm:text-base">Fill in your information to create your CV</p>
             </div>
-            <div className="flex flex-row gap-2 w-full sm:w-auto sm:justify-end">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:justify-end">
               <Button variant="outline" size="sm" onClick={() => setShowTemplateSelector(true)} className="flex-1 sm:flex-initial text-xs sm:text-sm">
                 <Palette className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 <span className="hidden sm:inline">Templates</span>
