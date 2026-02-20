@@ -380,17 +380,17 @@ export default function EditorPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {currentCV.skills.map((skill) => (
-                    <div key={skill.id} className="flex items-center gap-4">
+                    <div key={skill.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
                       <Input
                         placeholder="Skill name"
                         value={skill.name}
                         onChange={(e) => updateSkill(skill.id, { ...skill, name: e.target.value })}
-                        className="flex-1"
+                        className="flex-1 w-full"
                       />
                       <select
                         value={skill.level}
                         onChange={(e) => updateSkill(skill.id, { ...skill, level: e.target.value as any })}
-                        className="h-10 px-3 rounded-md border border-input bg-background"
+                        className="h-10 px-3 rounded-md border border-input bg-background w-full sm:w-auto"
                       >
                         <option value="beginner">Beginner</option>
                         <option value="intermediate">Intermediate</option>
@@ -400,7 +400,7 @@ export default function EditorPage() {
                       <select
                         value={skill.category}
                         onChange={(e) => updateSkill(skill.id, { ...skill, category: e.target.value as any })}
-                        className="h-10 px-3 rounded-md border border-input bg-background"
+                        className="h-10 px-3 rounded-md border border-input bg-background w-full sm:w-auto"
                       >
                         <option value="technical">Technical</option>
                         <option value="soft">Soft</option>
@@ -409,6 +409,7 @@ export default function EditorPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => removeSkill(skill.id)}
+                        className="w-full sm:w-auto"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -527,17 +528,17 @@ export default function EditorPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {currentCV.languages.map((lang, index) => (
-                    <div key={lang.id} className="flex items-center gap-4">
+                    <div key={lang.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
                       <Input
                         placeholder="Language (e.g., English)"
                         value={lang.language}
                         onChange={(e) => updateLanguage(lang.id, { ...lang, language: e.target.value })}
-                        className="flex-1"
+                        className="flex-1 w-full"
                       />
                       <select
                         value={lang.proficiency}
                         onChange={(e) => updateLanguage(lang.id, { ...lang, proficiency: e.target.value as any })}
-                        className="h-10 px-3 rounded-md border border-input bg-background"
+                        className="h-10 px-3 rounded-md border border-input bg-background w-full sm:w-auto"
                       >
                         <option value="beginner">Beginner</option>
                         <option value="intermediate">Intermediate</option>
@@ -549,6 +550,7 @@ export default function EditorPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => removeLanguage(lang.id)}
+                        className="w-full sm:w-auto"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
