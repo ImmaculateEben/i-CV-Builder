@@ -649,15 +649,12 @@ export default function EditorPage() {
                     <Plus className="h-4 w-4 mr-2" />
                     Add Referee
                   </Button>
-                  <div className="flex justify-between pt-4">
+                  <div className="flex flex-col sm:flex-row justify-between gap-4 pt-4">
                     <Button type="button" variant="outline" onClick={handlePrevious}>
                       <ChevronLeft className="h-4 w-4 mr-2" />
                       Previous
                     </Button>
-                    <Button>
-                      <Download className="h-4 w-4 mr-2" />
-                      Download CV
-                    </Button>
+                    <PDFDownloadButton />
                   </div>
                 </CardContent>
               </Card>

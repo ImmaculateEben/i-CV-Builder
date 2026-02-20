@@ -134,6 +134,42 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#4b5563",
   },
+  certItem: {
+    marginBottom: 10,
+  },
+  certHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  certName: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: "#1a1a1a",
+  },
+  certIssuer: {
+    fontSize: 9,
+    color: "#4b5563",
+  },
+  certDate: {
+    fontSize: 9,
+    color: "#6b7280",
+  },
+  refereeItem: {
+    marginBottom: 12,
+  },
+  refereeName: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: "#1a1a1a",
+  },
+  refereePosition: {
+    fontSize: 9,
+    color: "#4b5563",
+  },
+  refereeContact: {
+    fontSize: 9,
+    color: "#6b7280",
+  },
 })
 
 interface CVPDFProps {
@@ -141,7 +177,7 @@ interface CVPDFProps {
 }
 
 export function CVPDFDocument({ cv }: CVPDFProps) {
-  const { personalInfo, summary, experience, education, skills, languages } = cv
+  const { personalInfo, summary, experience, education, skills, certifications, languages, referees } = cv
 
   return (
     <Document>
@@ -241,6 +277,24 @@ export function CVPDFDocument({ cv }: CVPDFProps) {
           </View>
         )}
 
+        {/* Certifications */}
+        {certifications.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Certifications</Text>
+            {certifications.map((cert) => (
+              <View key={cert.id} style={styles.certItem}>
+                <View style={styles.certHeader}>
+                  <View>
+                    <Text style={styles.certName}>{cert.name}</Text>
+                    <Text style={styles.certIssuer}>{cert.issuer}</Text>
+                  </View>
+                  <Text style={styles.certDate}>{cert.date}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Languages */}
         {languages.length > 0 && (
           <View style={styles.section}>
@@ -252,6 +306,22 @@ export function CVPDFDocument({ cv }: CVPDFProps) {
                 </Text>
               ))}
             </View>
+          </View>
+        )}
+
+        {/* Referees */}
+        {referees.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Referees</Text>
+            {referees.map((ref) => (
+              <View key={ref.id} style={styles.refereeItem}>
+                <Text style={styles.refereeName}>{ref.name}</Text>
+                <Text style={styles.refereePosition}>{ref.position} at {ref.company}</Text>
+                <Text style={styles.refereeContact}>
+                  {ref.email} {ref.phone ? `| ${ref.phone}` : ""}
+                </Text>
+              </View>
+            ))}
           </View>
         )}
       </Page>
