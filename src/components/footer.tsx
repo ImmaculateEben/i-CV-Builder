@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { FileText, Github, Twitter, Linkedin } from "lucide-react"
+import { FileText, Github, Twitter, Linkedin, Heart } from "lucide-react"
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
@@ -32,14 +32,6 @@ export function Footer() {
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   Templates
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/pricing"
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Pricing
                 </Link>
               </li>
               <li>
@@ -119,6 +111,18 @@ export function Footer() {
         <div className="mt-12 flex flex-col md:flex-row items-center justify-between gap-4 border-t border-border pt-8">
           <p className="text-sm text-muted-foreground">
             © {currentYear} CV Builder. All rights reserved.
+          </p>
+
+          <p className="text-sm text-muted-foreground flex items-center gap-1">
+            Designed with <Heart className="h-4 w-4 text-red-500 fill-red-500" /> by{" "}
+            <a 
+              href="https://immaculatedesigns.com.ng" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-foreground hover:underline font-medium"
+            >
+              Ebenezer
+            </a>
           </p>
 
           {/* Social Links */}
