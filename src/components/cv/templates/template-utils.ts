@@ -1,4 +1,5 @@
-import type { CV, Skill, TemplateId } from "@/types/cv"
+import type { CV, CVPresentation, SectionKey, Skill, TemplateId } from "@/types/cv"
+import { createEmptyCV, sectionKeys } from "@/types/cv"
 
 const monthFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -230,3 +231,57 @@ export const capitalize = (value: string) =>
 
 export const joinNonEmpty = (values: string[], separator = " | ") =>
   values.map((value) => value.trim()).filter(Boolean).join(separator)
+
+export function getNormalizedPresentation(cv: CV): CVPresentation {
+  const defaults = createEmptyCV().presentation!
+  const input = cv.presentation ?? defaults
+  const normalizedOrder: SectionKey[] = []
+
+  for (const key of input.sectionOrder ?? []) {
+    if ((sectionKeys as readonly string[]).includes(key) && !normalizedOrder.includes(key)) {
+      normalizedOrder.push(key as SectionKey)
+    }
+  }
+
+  for (const key of sectionKeys) {
+    if (!normalizedOrder.includes(key)) {
+      normalizedOrder.push(key)
+    }
+  }
+
+  const hiddenSections = (input.hiddenSections ?? []).filter(
+    (key, index, array): key is SectionKey =>
+      (sectionKeys as readonly string[]).includes(key) && array.indexOf(key) === index
+  )
+
+  return {
+    ...defaults,
+    ...input,
+    sectionOrder: normalizedOrder,
+    hiddenSections,
+    density: input.density === "compact" ? "compact" : "comfortable",
+    fontScale:
+      input.fontScale === "sm" || input.fontScale === "lg" ? input.fontScale : "md",
+    accentVariant: input.accentVariant ?? "",
+  }
+}
+
+export function applyPresentationVisibility(cv: CV): CV {
+  const presentation = getNormalizedPresentation(cv)
+  const hidden = new Set<SectionKey>(presentation.hiddenSections)
+
+  if (hidden.size === 0) {
+    return cv
+  }
+
+  return {
+    ...cv,
+    summary: hidden.has("summary") ? "" : cv.summary,
+    experience: hidden.has("experience") ? [] : cv.experience,
+    education: hidden.has("education") ? [] : cv.education,
+    skills: hidden.has("skills") ? [] : cv.skills,
+    certifications: hidden.has("certifications") ? [] : cv.certifications,
+    languages: hidden.has("languages") ? [] : cv.languages,
+    referees: hidden.has("referees") ? [] : cv.referees,
+  }
+}

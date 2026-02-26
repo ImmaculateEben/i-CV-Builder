@@ -18,7 +18,7 @@ import { NigerianTemplate } from "./nigerian-template"
 import { MinimalTemplate } from "./minimal-template"
 import { ExecutiveTemplate } from "./executive-template"
 import { TechTemplate } from "./tech-template"
-import { buildPreviewCV, demoCV } from "./template-utils"
+import { applyPresentationVisibility, buildPreviewCV, demoCV } from "./template-utils"
 
 type TemplateComponent = ComponentType<{ cv: CV }>
 
@@ -122,7 +122,7 @@ export function CVTemplateRenderer({
   cv: CV
 }) {
   const TemplateComponent = templateComponentMap[templateId]
-  return <TemplateComponent cv={cv} />
+  return <TemplateComponent cv={applyPresentationVisibility(cv)} />
 }
 
 export function CVTemplatePreview({
@@ -130,13 +130,16 @@ export function CVTemplatePreview({
   cv,
   className,
   scale = 0.22,
+  scaleClassName,
 }: {
   templateId: TemplateId
   cv?: CV
   className?: string
   scale?: number
+  scaleClassName?: string
 }) {
   const previewCV = buildPreviewCV(cv ?? demoCV, templateId)
+  const useResponsiveScaleClass = Boolean(scaleClassName)
 
   return (
     <div
@@ -147,8 +150,15 @@ export function CVTemplatePreview({
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.95),transparent_55%)]" />
       <div
-        className="absolute left-1/2 top-3 origin-top -translate-x-1/2"
-        style={{ transform: `translateX(-50%) scale(${scale})` }}
+        className={cn(
+          "absolute left-1/2 top-3 origin-top -translate-x-1/2",
+          useResponsiveScaleClass ? scaleClassName : undefined
+        )}
+        style={
+          useResponsiveScaleClass
+            ? undefined
+            : { transform: `translateX(-50%) scale(${scale})` }
+        }
       >
         <div className="w-[800px]">
           <CVTemplateRenderer templateId={templateId} cv={previewCV} />

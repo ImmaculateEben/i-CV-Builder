@@ -1,10 +1,12 @@
+import type { ReactElement } from "react"
 import { Link, Page, StyleSheet, Text, View } from "@react-pdf/renderer"
-import type { CV, Skill, TemplateId } from "@/types/cv"
+import type { CV, CVPresentation, SectionKey, Skill, TemplateId } from "@/types/cv"
 import {
   capitalize,
   fallbackDescriptionLines,
   formatDateRange,
   formatMonthYear,
+  getNormalizedPresentation,
   getContactItems,
   getFullName,
   getLinkItems,
@@ -138,15 +140,16 @@ const THEMES: Record<TemplateId, PdfTheme> = {
   tech: {
     id: "tech",
     layout: "split",
-    header: "dark",
+    header: "plain",
     skillsMode: "bars",
-    pageBg: "#020617",
-    surface: "#0f172a",
-    text: "#e2e8f0",
-    muted: "#94a3b8",
-    accent: "#22d3ee",
-    accentSoft: "#082f49",
-    border: "#1e293b",
+    // Print-safe variant: keep tech identity (mono + cyan accents) without relying on dark backgrounds.
+    pageBg: "#f8fafc",
+    surface: "#ffffff",
+    text: "#0f172a",
+    muted: "#475569",
+    accent: "#0891b2",
+    accentSoft: "#ecfeff",
+    border: "#bae6fd",
     bodyFont: "Courier",
     headingFont: "Courier-Bold",
     label: "profile.ts",
@@ -154,22 +157,30 @@ const THEMES: Record<TemplateId, PdfTheme> = {
 }
 
 const CONTACT_SEPARATOR = " | "
+const MAIN_SECTION_KEYS: SectionKey[] = ["summary", "experience", "education"]
+const SIDE_SECTION_KEYS: SectionKey[] = ["skills", "certifications", "languages", "referees"]
+const ORDERABLE_SECTION_KEYS: SectionKey[] = [...MAIN_SECTION_KEYS, ...SIDE_SECTION_KEYS]
 
 function titleLabel(theme: PdfTheme, label: string) {
   return theme.upperTitles ? label.toUpperCase() : label
 }
 
-function stylesFor(theme: PdfTheme) {
+function stylesFor(theme: PdfTheme, presentation: CVPresentation) {
   const headerText = theme.header === "accent" || theme.header === "dark" ? "#ffffff" : theme.text
   const headerMuted = theme.header === "accent" || theme.header === "dark" ? "rgba(255,255,255,0.88)" : theme.muted
+  const densityFactor = presentation.density === "compact" ? 0.9 : 1
+  const fontScale =
+    presentation.fontScale === "sm" ? 0.94 : presentation.fontScale === "lg" ? 1.08 : 1
+  const sp = (value: number) => Number((value * densityFactor).toFixed(2))
+  const fs = (value: number) => Number((value * fontScale).toFixed(2))
 
   return StyleSheet.create({
     page: {
-      padding: 24,
+      padding: sp(24),
       backgroundColor: theme.pageBg,
       fontFamily: theme.bodyFont,
       color: theme.text,
-      fontSize: 10,
+      fontSize: fs(10),
       lineHeight: 1.35,
     },
     shell: {
@@ -180,12 +191,12 @@ function stylesFor(theme: PdfTheme) {
       overflow: "hidden",
     },
     topRibbon: {
-      height: 7,
+      height: sp(7),
       backgroundColor: theme.accent,
     },
     header: {
-      paddingHorizontal: 18,
-      paddingVertical: 16,
+      paddingHorizontal: sp(18),
+      paddingVertical: sp(16),
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
     },
@@ -202,50 +213,50 @@ function stylesFor(theme: PdfTheme) {
     },
     name: {
       fontFamily: theme.headingFont,
-      fontSize: 22,
+      fontSize: fs(22),
       fontWeight: 700,
       color: headerText,
       textAlign: theme.header === "center" ? "center" : "left",
     },
     headline: {
-      marginTop: 4,
-      fontSize: 10,
+      marginTop: sp(4),
+      fontSize: fs(10),
       color: headerMuted,
       textAlign: theme.header === "center" ? "center" : "left",
     },
     contactLine: {
-      marginTop: 6,
-      fontSize: 9,
+      marginTop: sp(6),
+      fontSize: fs(9),
       color: headerMuted,
       textAlign: theme.header === "center" ? "center" : "left",
     },
     linksRow: {
-      marginTop: 6,
+      marginTop: sp(6),
       flexDirection: "row",
       flexWrap: "wrap",
       justifyContent: theme.header === "center" ? "center" : "flex-start",
     },
     link: {
-      fontSize: 9,
+      fontSize: fs(9),
       color: headerText,
       textDecoration: "underline",
-      marginRight: 10,
-      marginBottom: 2,
+      marginRight: sp(10),
+      marginBottom: sp(2),
     },
     headerLabel: {
-      marginTop: 6,
+      marginTop: sp(6),
       alignSelf: theme.header === "center" ? "center" : "flex-start",
-      paddingHorizontal: 7,
-      paddingVertical: 3,
+      paddingHorizontal: sp(7),
+      paddingVertical: sp(3),
       borderRadius: 999,
       borderWidth: 1,
       borderColor: theme.header === "plain" || theme.header === "center" ? theme.border : "rgba(255,255,255,0.35)",
       backgroundColor: theme.header === "plain" || theme.header === "center" ? theme.accentSoft : "rgba(255,255,255,0.12)",
       color: headerText,
-      fontSize: 8,
+      fontSize: fs(8),
     },
     body: {
-      padding: 18,
+      padding: sp(18),
     },
     splitBody: {
       flexDirection: "row",
@@ -255,58 +266,58 @@ function stylesFor(theme: PdfTheme) {
       flexBasis: "67%",
       flexGrow: 1,
       flexShrink: 1,
-      paddingRight: 10,
+      paddingRight: sp(10),
     },
     sideCol: {
       flexBasis: "33%",
       flexGrow: 0,
       flexShrink: 0,
-      paddingLeft: 10,
+      paddingLeft: sp(10),
     },
     sidebarCard: {
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 8,
-      padding: 10,
-      marginBottom: 10,
-      backgroundColor: theme.id === "tech" ? "#111827" : theme.accentSoft,
+      padding: sp(10),
+      marginBottom: sp(10),
+      backgroundColor: theme.accentSoft,
     },
     section: {
-      marginBottom: 12,
+      marginBottom: sp(12),
     },
     sectionTitleRow: {
       flexDirection: "row",
       alignItems: "center",
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
-      paddingBottom: 4,
-      marginBottom: 7,
+      paddingBottom: sp(4),
+      marginBottom: sp(7),
     },
     sectionDot: {
-      width: 6,
-      height: 6,
+      width: sp(6),
+      height: sp(6),
       borderRadius: 3,
       backgroundColor: theme.accent,
-      marginRight: 6,
+      marginRight: sp(6),
     },
     sectionTitle: {
       fontFamily: theme.headingFont,
-      fontSize: 11,
+      fontSize: fs(11),
       fontWeight: 700,
       color: theme.id === "creative" ? theme.accent : theme.text,
       letterSpacing: 0.25,
     },
     bodyText: {
-      fontSize: 10,
+      fontSize: fs(10),
       color: theme.text,
       lineHeight: 1.35,
     },
     muted: {
-      fontSize: 9,
+      fontSize: fs(9),
       color: theme.muted,
     },
     item: {
-      marginBottom: 9,
+      marginBottom: sp(9),
     },
     rowBetween: {
       flexDirection: "row",
@@ -316,102 +327,121 @@ function stylesFor(theme: PdfTheme) {
     grow: {
       flexGrow: 1,
       flexShrink: 1,
-      paddingRight: 6,
+      paddingRight: sp(6),
     },
     itemTitle: {
-      fontSize: 10,
+      fontSize: fs(10),
       fontFamily: theme.headingFont,
       fontWeight: 700,
       color: theme.text,
     },
     itemSubtitle: {
-      marginTop: 2,
-      fontSize: 9,
+      marginTop: sp(2),
+      fontSize: fs(9),
       color: theme.muted,
     },
     itemDate: {
       maxWidth: 125,
-      fontSize: 8.5,
+      fontSize: fs(8.5),
       color: theme.muted,
       textAlign: "right",
     },
     bulletRow: {
       flexDirection: "row",
       alignItems: "flex-start",
-      marginTop: 2,
+      marginTop: sp(2),
     },
     bulletMark: {
-      width: 10,
-      fontSize: 9,
+      width: sp(10),
+      fontSize: fs(9),
       color: theme.accent,
     },
     bulletText: {
       flexGrow: 1,
       flexShrink: 1,
-      fontSize: 9.25,
+      fontSize: fs(9.25),
       color: theme.text,
       lineHeight: 1.35,
     },
     badgeWrap: {
       flexDirection: "row",
       flexWrap: "wrap",
-      marginTop: -4,
+      marginTop: -sp(4),
     },
     badge: {
-      marginTop: 4,
-      marginRight: 4,
+      marginTop: sp(4),
+      marginRight: sp(4),
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: 6,
-      backgroundColor: theme.id === "tech" ? "#0b1220" : "#ffffff",
-      paddingHorizontal: 6,
-      paddingVertical: 3,
-      fontSize: 8.5,
+      backgroundColor: "#ffffff",
+      paddingHorizontal: sp(6),
+      paddingVertical: sp(3),
+      fontSize: fs(8.5),
       color: theme.text,
     },
     listLine: {
-      fontSize: 9,
+      fontSize: fs(9),
       color: theme.text,
-      marginBottom: 4,
+      marginBottom: sp(4),
     },
     subheading: {
-      fontSize: 8.5,
+      fontSize: fs(8.5),
       color: theme.muted,
-      marginBottom: 4,
+      marginBottom: sp(4),
     },
     skillRow: {
-      marginBottom: 6,
+      marginBottom: sp(6),
     },
     skillMeta: {
       flexDirection: "row",
       justifyContent: "space-between",
-      marginBottom: 2,
+      marginBottom: sp(2),
     },
     skillName: {
-      fontSize: 8.25,
+      fontSize: fs(8.25),
       color: theme.text,
       flexShrink: 1,
-      marginRight: 6,
+      marginRight: sp(6),
     },
     skillLevel: {
-      fontSize: 8,
+      fontSize: fs(8),
       color: theme.muted,
     },
     skillTrack: {
-      height: 4,
-      backgroundColor: theme.id === "tech" ? "#1e293b" : "#e2e8f0",
+      height: sp(4),
+      backgroundColor: "#e2e8f0",
       borderRadius: 999,
       overflow: "hidden",
     },
     skillFill: {
-      height: 4,
+      height: sp(4),
       backgroundColor: theme.accent,
       borderRadius: 999,
     },
     divider: {
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
-      marginVertical: 6,
+      marginVertical: sp(6),
+    },
+    emptyStateCard: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 8,
+      padding: sp(12),
+      backgroundColor: theme.id === "tech" ? "#f0f9ff" : theme.accentSoft,
+    },
+    emptyStateTitle: {
+      fontFamily: theme.headingFont,
+      fontSize: fs(10),
+      fontWeight: 700,
+      color: theme.text,
+    },
+    emptyStateText: {
+      marginTop: sp(4),
+      fontSize: fs(9),
+      color: theme.muted,
+      lineHeight: 1.35,
     },
   })
 }
@@ -649,47 +679,80 @@ function Referees({ cv, theme, styles }: { cv: CV; theme: PdfTheme; styles: Retu
 }
 
 function ThemedTemplatePDF({ cv, theme }: { cv: CV; theme: PdfTheme }) {
-  const styles = stylesFor(theme)
+  const presentation = getNormalizedPresentation(cv)
+  const hidden = new Set<SectionKey>(presentation.hiddenSections)
+  const styles = stylesFor(theme, presentation)
+
+  const orderedSections = presentation.sectionOrder.filter((key): key is SectionKey =>
+    ORDERABLE_SECTION_KEYS.includes(key)
+  )
+
+  const renderSection = (key: SectionKey): ReactElement | null => {
+    if (hidden.has(key)) {
+      return null
+    }
+
+    switch (key) {
+      case "summary":
+        return <Summary key={key} cv={cv} theme={theme} styles={styles} />
+      case "experience":
+        return <Experience key={key} cv={cv} theme={theme} styles={styles} />
+      case "education":
+        return <Education key={key} cv={cv} theme={theme} styles={styles} />
+      case "skills":
+        return <Skills key={key} cv={cv} theme={theme} styles={styles} />
+      case "certifications":
+        return <Certifications key={key} cv={cv} theme={theme} styles={styles} />
+      case "languages":
+        return <Languages key={key} cv={cv} theme={theme} styles={styles} />
+      case "referees":
+        return <Referees key={key} cv={cv} theme={theme} styles={styles} />
+      default:
+        return null
+    }
+  }
+
+  const mainSections = orderedSections.filter((key) => MAIN_SECTION_KEYS.includes(key))
+  const sideSections = orderedSections.filter((key) => SIDE_SECTION_KEYS.includes(key))
+  const renderedSideSections = sideSections
+    .map((key) => ({ key, node: renderSection(key) }))
+    .filter((item): item is { key: SectionKey; node: ReactElement } => item.node !== null)
+  const renderedMainSections = mainSections
+    .map((key) => renderSection(key))
+    .filter((node): node is ReactElement => node !== null)
+  const hasHeader = !hidden.has("personal")
+  const hasVisibleSections = renderedMainSections.length > 0 || renderedSideSections.length > 0
 
   return (
     <Page size="A4" style={styles.page}>
       <View style={styles.shell}>
         {theme.topRibbon ? <View style={styles.topRibbon} /> : null}
-        <Header cv={cv} theme={theme} styles={styles} />
+        {hasHeader ? <Header cv={cv} theme={theme} styles={styles} /> : null}
 
         <View style={styles.body}>
+          {!hasHeader && !hasVisibleSections ? (
+            <View style={styles.emptyStateCard}>
+              <Text style={styles.emptyStateTitle}>No visible content to export</Text>
+              <Text style={styles.emptyStateText}>
+                Add CV content or re-enable hidden sections in Layout & Style before exporting.
+              </Text>
+            </View>
+          ) : null}
           {theme.layout === "split" ? (
             <View style={styles.splitBody}>
               <View style={styles.mainCol}>
-                <Summary cv={cv} theme={theme} styles={styles} />
-                <Experience cv={cv} theme={theme} styles={styles} />
-                <Education cv={cv} theme={theme} styles={styles} />
+                {renderedMainSections}
               </View>
               <View style={styles.sideCol}>
-                <View style={styles.sidebarCard}>
-                  <Skills cv={cv} theme={theme} styles={styles} />
-                </View>
-                <View style={styles.sidebarCard}>
-                  <Certifications cv={cv} theme={theme} styles={styles} />
-                  {(cv.certifications.length > 0 && cv.languages.length > 0) || (cv.certifications.length > 0 && cv.referees.length > 0) ? (
-                    <View style={styles.divider} />
-                  ) : null}
-                  <Languages cv={cv} theme={theme} styles={styles} />
-                  {cv.languages.length > 0 && cv.referees.length > 0 ? <View style={styles.divider} /> : null}
-                  <Referees cv={cv} theme={theme} styles={styles} />
-                </View>
+                {renderedSideSections.map((item) => (
+                  <View key={item.key} style={styles.sidebarCard}>
+                    {item.node}
+                  </View>
+                ))}
               </View>
             </View>
           ) : (
-            <View>
-              <Summary cv={cv} theme={theme} styles={styles} />
-              <Experience cv={cv} theme={theme} styles={styles} />
-              <Education cv={cv} theme={theme} styles={styles} />
-              <Skills cv={cv} theme={theme} styles={styles} />
-              <Certifications cv={cv} theme={theme} styles={styles} />
-              <Languages cv={cv} theme={theme} styles={styles} />
-              <Referees cv={cv} theme={theme} styles={styles} />
-            </View>
+            <View>{orderedSections.map((key) => renderSection(key))}</View>
           )}
         </View>
       </View>

@@ -3,6 +3,7 @@ import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { CVTemplatePreview } from "@/components/cv/templates/registry"
 import { FileText, Download, Palette, Zap, Shield, Users } from "lucide-react"
 
 export default function HomePage() {
@@ -41,6 +42,80 @@ export default function HomePage() {
           <div className="absolute inset-0 -z-10 opacity-30">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_70%,_var(--primary)_0%,_transparent_50%)]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,_var(--accent)_0%,_transparent_50%)]" />
+          </div>
+        </section>
+
+        {/* Template Preview Showcase */}
+        <section className="py-10 sm:py-14">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+              <div className="rounded-2xl border bg-card p-4 sm:p-5 shadow-sm">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold">See Your CV Before You Export</h2>
+                    <p className="text-sm sm:text-base text-muted-foreground">
+                      Live previews stay responsive on mobile and desktop while keeping your content readable.
+                    </p>
+                  </div>
+                  <Link href="/templates">
+                    <Button variant="outline" className="w-full sm:w-auto">
+                      Browse Templates
+                    </Button>
+                  </Link>
+                </div>
+
+                <CVTemplatePreview
+                  templateId="modern"
+                  className="bg-slate-100 aspect-[4/5] sm:aspect-[3/4]"
+                  scaleClassName="scale-[0.29] sm:scale-[0.35] lg:scale-[0.4]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-2xl border bg-card p-3 shadow-sm">
+                  <div className="mb-2">
+                    <p className="text-sm font-semibold">Professional</p>
+                    <p className="text-xs text-muted-foreground">Formal and recruiter-friendly</p>
+                  </div>
+                  <CVTemplatePreview
+                    templateId="professional"
+                    className="rounded-xl border bg-stone-50 aspect-[4/5]"
+                    scaleClassName="scale-[0.24] sm:scale-[0.27]"
+                  />
+                </div>
+
+                <div className="rounded-2xl border bg-card p-3 shadow-sm">
+                  <div className="mb-2">
+                    <p className="text-sm font-semibold">Creative</p>
+                    <p className="text-xs text-muted-foreground">Portfolio-forward visual identity</p>
+                  </div>
+                  <CVTemplatePreview
+                    templateId="creative"
+                    className="rounded-xl border bg-rose-50/40 aspect-[4/5]"
+                    scaleClassName="scale-[0.24] sm:scale-[0.27]"
+                  />
+                </div>
+
+                <div className="rounded-2xl border bg-card p-3 shadow-sm sm:col-span-2">
+                  <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">Tech Grid</p>
+                      <p className="text-xs text-muted-foreground">
+                        Dark on-screen style with print-safe PDF export theme
+                      </p>
+                    </div>
+                    <Link href="/editor?template=tech" className="text-xs text-primary underline underline-offset-4">
+                      Try in editor
+                    </Link>
+                  </div>
+                  <CVTemplatePreview
+                    templateId="tech"
+                    className="rounded-xl border bg-slate-900/70 aspect-[3/4]"
+                    scaleClassName="scale-[0.24] sm:scale-[0.28] md:scale-[0.31]"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 

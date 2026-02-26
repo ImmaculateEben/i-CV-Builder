@@ -14,9 +14,11 @@ type CVRow = {
 
 type VersionRow = {
   id: string
+  user_id?: string
   cv_id: string
   created_at: string
   change_summary?: string | null
+  cv_snapshot?: unknown
 }
 
 export interface CVListItem {
@@ -239,11 +241,12 @@ export async function createCVVersionSnapshot({
 }
 
 export async function listCVVersions(cvId: string): Promise<EditorHistoryEntry[]> {
-  const supabase = createClient()
+  const { supabase, userId } = await requireUserId()
   const { data, error } = await supabase
     .from("cv_versions")
     .select("id, cv_id, created_at, change_summary")
     .eq("cv_id", cvId)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -256,4 +259,83 @@ export async function listCVVersions(cvId: string): Promise<EditorHistoryEntry[]
     createdAt: row.created_at,
     changeSummary: row.change_summary ?? undefined,
   }))
+}
+
+export async function getCVVersionSnapshot(versionId: string): Promise<CV | null> {
+  const { supabase, userId } = await requireUserId()
+  const { data, error } = await supabase
+    .from("cv_versions")
+    .select("id, user_id, cv_id, created_at, change_summary, cv_snapshot")
+    .eq("id", versionId)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  if (!data) {
+    return null
+  }
+
+  const row = data as VersionRow
+  if (!row.cv_snapshot || typeof row.cv_snapshot !== "object") {
+    return null
+  }
+
+  const base = createEmptyCV()
+  const raw = row.cv_snapshot as Partial<CV>
+  const templateIdCandidate = raw.templateId ?? base.templateId
+  const templateId = isTemplateId(String(templateIdCandidate))
+    ? (templateIdCandidate as CV["templateId"])
+    : base.templateId
+
+  return {
+    ...base,
+    ...raw,
+    id: raw.id ?? row.cv_id ?? base.id,
+    templateId,
+    personalInfo: {
+      ...base.personalInfo,
+      ...(raw.personalInfo ?? {}),
+    },
+    experience: Array.isArray(raw.experience) ? raw.experience : base.experience,
+    education: Array.isArray(raw.education) ? raw.education : base.education,
+    skills: Array.isArray(raw.skills) ? raw.skills : base.skills,
+    certifications: Array.isArray(raw.certifications) ? raw.certifications : base.certifications,
+    languages: Array.isArray(raw.languages) ? raw.languages : base.languages,
+    referees: Array.isArray(raw.referees) ? raw.referees : base.referees,
+    presentation: {
+      ...base.presentation,
+      ...(raw.presentation ?? {}),
+      sectionOrder: Array.isArray(raw.presentation?.sectionOrder)
+        ? raw.presentation.sectionOrder
+        : base.presentation?.sectionOrder ?? [],
+      hiddenSections: Array.isArray(raw.presentation?.hiddenSections)
+        ? raw.presentation.hiddenSections
+        : base.presentation?.hiddenSections ?? [],
+      density: raw.presentation?.density ?? base.presentation?.density ?? "comfortable",
+      fontScale: raw.presentation?.fontScale ?? base.presentation?.fontScale ?? "md",
+      accentVariant: raw.presentation?.accentVariant ?? base.presentation?.accentVariant ?? "",
+    },
+    targeting: {
+      ...base.targeting,
+      ...(raw.targeting ?? {}),
+      extractedKeywords: Array.isArray(raw.targeting?.extractedKeywords)
+        ? raw.targeting.extractedKeywords
+        : base.targeting?.extractedKeywords ?? [],
+      emphasisSections: Array.isArray(raw.targeting?.emphasisSections)
+        ? raw.targeting.emphasisSections
+        : base.targeting?.emphasisSections ?? [],
+      targetRole: raw.targeting?.targetRole ?? base.targeting?.targetRole ?? "",
+      targetCompany: raw.targeting?.targetCompany ?? base.targeting?.targetCompany ?? "",
+      jobDescription: raw.targeting?.jobDescription ?? base.targeting?.jobDescription ?? "",
+    },
+    variantMeta: {
+      ...base.variantMeta,
+      ...(raw.variantMeta ?? {}),
+    },
+    createdAt: raw.createdAt || row.created_at || base.createdAt,
+    updatedAt: raw.updatedAt || row.created_at || base.updatedAt,
+  }
 }

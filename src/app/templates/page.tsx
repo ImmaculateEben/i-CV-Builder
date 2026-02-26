@@ -30,6 +30,17 @@ export default function TemplatesPage() {
 
         <section className="py-10 sm:py-14">
           <div className="container mx-auto px-4">
+            <div className="mb-6 flex flex-wrap items-center justify-center gap-2 text-xs sm:text-sm">
+              <span className="rounded-full border bg-background px-3 py-1 font-medium">
+                7 templates
+              </span>
+              <span className="rounded-full border bg-background px-3 py-1">
+                Responsive previews
+              </span>
+              <span className="rounded-full border bg-background px-3 py-1">
+                Multi-page PDF export
+              </span>
+            </div>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
               {cvTemplateRegistry.map((template) => {
                 const Icon = template.icon
@@ -39,7 +50,11 @@ export default function TemplatesPage() {
                     key={template.id}
                     className="group overflow-hidden rounded-2xl border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
                   >
-                    <CVTemplatePreview templateId={template.id} className="rounded-none border-0" scale={0.2} />
+                    <CVTemplatePreview
+                      templateId={template.id}
+                      className="rounded-none border-0 bg-slate-100 aspect-[4/5] sm:aspect-[3/4]"
+                      scaleClassName="scale-[0.27] sm:scale-[0.31] lg:scale-[0.34]"
+                    />
 
                     <div className="border-t p-5">
                       <div className="mb-3 flex items-start justify-between gap-4">
@@ -68,7 +83,7 @@ export default function TemplatesPage() {
 
                       <p className="mb-4 text-sm text-muted-foreground">{template.description}</p>
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <Link href={`/editor?template=${template.id}`} className="flex-1">
                           <Button className="w-full">Use Template</Button>
                         </Link>

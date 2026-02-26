@@ -13,13 +13,17 @@ import { buildPreviewCV } from "@/components/cv/templates/template-utils"
 
 interface TemplateSelectorProps {
   onSelect?: (templateId: TemplateId) => void
+  mode?: "apply" | "clone"
 }
 
-export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
+export function TemplateSelector({ onSelect, mode = "apply" }: TemplateSelectorProps) {
   const { currentTemplate, setTemplate, currentCV } = useCVStore()
+  const isCloneMode = mode === "clone"
 
   const handleSelect = (templateId: TemplateId) => {
-    setTemplate(templateId)
+    if (!isCloneMode) {
+      setTemplate(templateId)
+    }
     onSelect?.(templateId)
   }
 
@@ -29,9 +33,13 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-semibold">Choose a Template</h3>
+        <h3 className="text-lg font-semibold">
+          {isCloneMode ? "Clone as New Template" : "Choose a Template"}
+        </h3>
         <p className="text-sm text-muted-foreground">
-          Switch anytime. Your data stays the same while the layout changes.
+          {isCloneMode
+            ? "Select a template to create a new draft clone while keeping your current CV content."
+            : "Switch anytime. Your data stays the same while the layout changes."}
         </p>
       </div>
 
@@ -80,7 +88,7 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
 
                   {isSelected && (
                     <span className="rounded-full bg-primary px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
-                      Active
+                      {isCloneMode ? "Current" : "Active"}
                     </span>
                   )}
                 </div>
@@ -97,7 +105,9 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
           <div>
             <h3 className="font-semibold">Live Preview</h3>
             <p className="text-sm text-muted-foreground">
-              Previewing <span className="font-medium text-foreground">{currentTemplateMeta.name}</span> with your content.
+              Previewing{" "}
+              <span className="font-medium text-foreground">{currentTemplateMeta.name}</span>{" "}
+              with your content.
             </p>
           </div>
           <span

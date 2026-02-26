@@ -35,7 +35,15 @@ function PDFContent({ variant, size, className }: PDFButtonProps) {
       document={<CVPDFDocument cv={currentCV} />}
       fileName={fileName}
     >
-      {({ loading }) => {
+      {({ loading, error }) => {
+        if (error) {
+          return (
+            <Button variant={variant} size={size} className={className} disabled>
+              <Download className="h-4 w-4 mr-2" />
+              PDF Error
+            </Button>
+          )
+        }
         if (loading) {
           return (
             <Button variant={variant} size={size} className={className} disabled>

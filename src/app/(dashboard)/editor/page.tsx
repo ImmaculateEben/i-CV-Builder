@@ -15,16 +15,17 @@ import {
   User, Briefcase, GraduationCap, Award, Languages, 
   Users, FileText, Plus, Trash2, ChevronRight, ChevronLeft,
   Eye, Palette, Save, Loader2, Upload, Download, History, Target, Sparkles,
-  Copy, ChevronUp, ChevronDown, Undo2, Redo2
+  Copy, ChevronUp, ChevronDown, Undo2, Redo2, SlidersHorizontal
 } from "lucide-react"
 import { useCVStore } from "@/store/cv-store"
-import type { CV } from "@/types/cv"
-import { isTemplateId } from "@/types/cv"
+import type { CV, SectionKey, TemplateId } from "@/types/cv"
+import { isTemplateId, sectionKeys } from "@/types/cv"
 import { cn } from "@/lib/utils"
 import { useHydrated } from "@/lib/use-hydrated"
 import {
   createCVVersionSnapshot,
   getCVById,
+  getCVVersionSnapshot,
   listCVVersions,
   saveCVRecord,
 } from "@/lib/cv-repository"
@@ -38,7 +39,7 @@ import {
 import { PDFDownloadButton } from "@/components/cv/pdf-button"
 import { TemplateSelector } from "@/components/cv/template-selector"
 import { CVTemplateRenderer } from "@/components/cv/templates/registry"
-import type { EditorHistoryEntry } from "@/types/editor"
+import type { CVImportEnvelope, EditorHistoryEntry } from "@/types/editor"
 
 const steps = [
   { id: "personal", label: "Personal Info", icon: User },
@@ -51,6 +52,20 @@ const steps = [
   { id: "referees", label: "Referees", icon: Users },
 ]
 
+const sectionLabels: Record<SectionKey, string> = {
+  personal: "Header / Personal Info",
+  summary: "Summary",
+  experience: "Experience",
+  education: "Education",
+  skills: "Skills",
+  certifications: "Certifications",
+  languages: "Languages",
+  referees: "Referees",
+}
+
+const AUTO_SAVE_DEBOUNCE_MS = 2200
+const AUTO_SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000
+
 type SkillLevel = CV["skills"][number]["level"]
 type SkillCategory = CV["skills"][number]["category"]
 type LanguageProficiency = CV["languages"][number]["proficiency"]
@@ -62,6 +77,217 @@ const fingerprintCV = (cv: CV) =>
     createdAt: "",
     updatedAt: "",
   })
+
+const hasMeaningfulCVData = (cv: CV) =>
+  Boolean(
+    cv.summary.trim() ||
+      cv.experience.length > 0 ||
+      cv.education.length > 0 ||
+      cv.skills.length > 0 ||
+      cv.certifications.length > 0 ||
+      cv.languages.length > 0 ||
+      cv.referees.length > 0 ||
+      cv.personalInfo.firstName.trim() ||
+      cv.personalInfo.lastName.trim()
+  )
+
+const buildKeywordCorpus = (cv: CV) =>
+  [
+    cv.summary,
+    cv.personalInfo.firstName,
+    cv.personalInfo.lastName,
+    cv.personalInfo.address,
+    ...cv.experience.flatMap((exp) => [exp.position, exp.company, exp.description]),
+    ...cv.education.flatMap((edu) => [edu.institution, edu.degree, edu.field]),
+    ...cv.skills.map((skill) => skill.name),
+    ...cv.certifications.flatMap((cert) => [cert.name, cert.issuer]),
+    ...cv.languages.map((lang) => lang.language),
+  ]
+    .join(" \n")
+    .toLowerCase()
+
+const generateClientId = () => Math.random().toString(36).slice(2, 11)
+
+type StepCompletionStatus = "empty" | "partial" | "complete"
+type EditorStatusTone = "neutral" | "info" | "success" | "warning" | "error"
+
+const hasText = (value: string) => value.trim().length > 0
+
+function getStepCompletionStatus(cv: CV, stepId: string): StepCompletionStatus {
+  switch (stepId) {
+    case "personal": {
+      const fields = [
+        cv.personalInfo.firstName,
+        cv.personalInfo.lastName,
+        cv.personalInfo.email,
+        cv.personalInfo.phone,
+      ]
+      const filled = fields.filter(hasText).length
+      if (filled === 0) return "empty"
+      return filled === fields.length ? "complete" : "partial"
+    }
+    case "summary":
+      return hasText(cv.summary) ? "complete" : "empty"
+    case "experience": {
+      const filledRows = cv.experience.filter((row) =>
+        [row.company, row.position, row.description].some(hasText)
+      )
+      if (filledRows.length === 0) return "empty"
+      const completeRows = filledRows.filter((row) => hasText(row.company) && hasText(row.position))
+      return completeRows.length === filledRows.length ? "complete" : "partial"
+    }
+    case "education": {
+      const filledRows = cv.education.filter((row) =>
+        [row.institution, row.degree, row.field].some(hasText)
+      )
+      if (filledRows.length === 0) return "empty"
+      const completeRows = filledRows.filter((row) => hasText(row.institution) && hasText(row.degree))
+      return completeRows.length === filledRows.length ? "complete" : "partial"
+    }
+    case "skills": {
+      if (cv.skills.length === 0) return "empty"
+      const namedSkills = cv.skills.filter((row) => hasText(row.name))
+      if (namedSkills.length === 0) return "partial"
+      return namedSkills.length === cv.skills.length ? "complete" : "partial"
+    }
+    case "certifications": {
+      if (cv.certifications.length === 0) return "empty"
+      const filledRows = cv.certifications.filter((row) => [row.name, row.issuer].some(hasText))
+      if (filledRows.length === 0) return "partial"
+      const completeRows = filledRows.filter((row) => hasText(row.name) && hasText(row.issuer))
+      return completeRows.length === filledRows.length ? "complete" : "partial"
+    }
+    case "languages": {
+      if (cv.languages.length === 0) return "empty"
+      const named = cv.languages.filter((row) => hasText(row.language))
+      if (named.length === 0) return "partial"
+      return named.length === cv.languages.length ? "complete" : "partial"
+    }
+    case "referees": {
+      if (cv.referees.length === 0) return "empty"
+      const filledRows = cv.referees.filter((row) => [row.name, row.position, row.company].some(hasText))
+      if (filledRows.length === 0) return "partial"
+      const completeRows = filledRows.filter(
+        (row) => hasText(row.name) && hasText(row.position) && hasText(row.company)
+      )
+      return completeRows.length === filledRows.length ? "complete" : "partial"
+    }
+    default:
+      return "empty"
+  }
+}
+
+function getEditorStatusTone(statusMessage: string): EditorStatusTone {
+  const message = statusMessage.toLowerCase()
+  if (message.includes("failed") || message.includes("error")) return "error"
+  if (message.includes("unsaved")) return "warning"
+  if (message.includes("saving") || message.includes("loading")) return "info"
+  if (
+    message.includes("saved") ||
+    message.includes("autosaved") ||
+    message.includes("checkpoint created") ||
+    message.includes("loaded")
+  ) {
+    return "success"
+  }
+  return "neutral"
+}
+
+type HistoryCompareRow = {
+  label: string
+  previous: string
+  current: string
+  changed: boolean
+}
+
+const listValue = (items: string[]) => items.filter(Boolean).join(", ") || "None"
+
+function buildHistoryCompareRows(previous: CV, current: CV): HistoryCompareRow[] {
+  const prevName =
+    [previous.personalInfo.firstName, previous.personalInfo.lastName]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(" ") || "Untitled CV"
+  const currentName =
+    [current.personalInfo.firstName, current.personalInfo.lastName]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(" ") || "Untitled CV"
+
+  const prevPresentation = previous.presentation
+  const currentPresentation = current.presentation
+
+  const rows: HistoryCompareRow[] = [
+    { label: "Name", previous: prevName, current: currentName, changed: prevName !== currentName },
+    {
+      label: "Template",
+      previous: previous.templateId,
+      current: current.templateId,
+      changed: previous.templateId !== current.templateId,
+    },
+    {
+      label: "Summary Length",
+      previous: `${previous.summary.trim().length} chars`,
+      current: `${current.summary.trim().length} chars`,
+      changed: previous.summary.trim() !== current.summary.trim(),
+    },
+    {
+      label: "Experience",
+      previous: String(previous.experience.length),
+      current: String(current.experience.length),
+      changed: previous.experience.length !== current.experience.length,
+    },
+    {
+      label: "Education",
+      previous: String(previous.education.length),
+      current: String(current.education.length),
+      changed: previous.education.length !== current.education.length,
+    },
+    {
+      label: "Skills",
+      previous: String(previous.skills.length),
+      current: String(current.skills.length),
+      changed: previous.skills.length !== current.skills.length,
+    },
+    {
+      label: "Certifications",
+      previous: String(previous.certifications.length),
+      current: String(current.certifications.length),
+      changed: previous.certifications.length !== current.certifications.length,
+    },
+    {
+      label: "Languages",
+      previous: String(previous.languages.length),
+      current: String(current.languages.length),
+      changed: previous.languages.length !== current.languages.length,
+    },
+    {
+      label: "Referees",
+      previous: String(previous.referees.length),
+      current: String(current.referees.length),
+      changed: previous.referees.length !== current.referees.length,
+    },
+    {
+      label: "Hidden Sections",
+      previous: listValue((prevPresentation?.hiddenSections ?? []).map((key) => sectionLabels[key])),
+      current: listValue((currentPresentation?.hiddenSections ?? []).map((key) => sectionLabels[key])),
+      changed:
+        JSON.stringify(prevPresentation?.hiddenSections ?? []) !==
+        JSON.stringify(currentPresentation?.hiddenSections ?? []),
+    },
+    {
+      label: "PDF Density / Scale",
+      previous: `${prevPresentation?.density ?? "comfortable"} / ${prevPresentation?.fontScale ?? "md"}`,
+      current: `${currentPresentation?.density ?? "comfortable"} / ${currentPresentation?.fontScale ?? "md"}`,
+      changed:
+        (prevPresentation?.density ?? "comfortable") !==
+          (currentPresentation?.density ?? "comfortable") ||
+        (prevPresentation?.fontScale ?? "md") !== (currentPresentation?.fontScale ?? "md"),
+    },
+  ]
+
+  return rows
+}
 
 function RowActionButtons({
   canMoveUp,
@@ -135,28 +361,45 @@ function EditorPageContent() {
   const [currentStep, setCurrentStep] = useState(0)
   const [showPreview, setShowPreview] = useState(false)
   const [showTemplateSelector, setShowTemplateSelector] = useState(false)
+  const [templateSelectorMode, setTemplateSelectorMode] = useState<"apply" | "clone">("apply")
   const [showHistory, setShowHistory] = useState(false)
   const [showTargeting, setShowTargeting] = useState(false)
+  const [showImportPreview, setShowImportPreview] = useState(false)
+  const [showLayoutStyle, setShowLayoutStyle] = useState(false)
   const [isLoadingCV, setIsLoadingCV] = useState(false)
   const [isSavingCV, setIsSavingCV] = useState(false)
+  const [isAutoSavingCV, setIsAutoSavingCV] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [isLoadingHistorySnapshot, setIsLoadingHistorySnapshot] = useState(false)
   const [statusMessage, setStatusMessage] = useState("Draft (not saved)")
   const [lastSavedFingerprint, setLastSavedFingerprint] = useState<string | null>(null)
   const loadedCvIdRef = useRef<string | null>(null)
   const hasPromptedDraftRef = useRef<string | null>(null)
   const importFileRef = useRef<HTMLInputElement | null>(null)
   const [historyEntries, setHistoryEntries] = useState<EditorHistoryEntry[]>([])
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<EditorHistoryEntry | null>(null)
+  const [selectedHistorySnapshot, setSelectedHistorySnapshot] = useState<CV | null>(null)
+  const [pendingImportEnvelope, setPendingImportEnvelope] = useState<CVImportEnvelope | null>(null)
+  const [pendingImportFileName, setPendingImportFileName] = useState<string>("")
+  const historySnapshotCacheRef = useRef<Record<string, CV>>({})
+  const lastAutoSnapshotAtRef = useRef<number>(0)
+  const lastAutoSnapshotFingerprintRef = useRef<string | null>(null)
   const { currentCV, currentTemplate, canUndo, canRedo, undo, redo, setCurrentCV, setTemplate, updateSummary, addExperience, updateExperience, removeExperience, duplicateExperience, moveExperience,
     addEducation, updateEducation, removeEducation, duplicateEducation, moveEducation,
     addSkill, updateSkill, removeSkill, duplicateSkill, moveSkill,
     addCertification, updateCertification, removeCertification, duplicateCertification, moveCertification,
     addLanguage, updateLanguage, removeLanguage, duplicateLanguage, moveLanguage,
     addReferee, updateReferee, removeReferee, duplicateReferee, moveReferee,
-    updateTargeting,
+    updateTargeting, updatePresentation, moveSectionOrder, toggleSectionVisibility,
   } = useCVStore()
 
   const currentCvIdParam = searchParams.get("id")?.trim() ?? ""
   const draftStorageKey = buildDraftStorageKey(currentCvIdParam || currentCV.id)
+
+  const markVersionSnapshot = (cv: CV) => {
+    lastAutoSnapshotAtRef.current = Date.now()
+    lastAutoSnapshotFingerprintRef.current = fingerprintCV(cv)
+  }
 
   useEffect(() => {
     const templateParam = searchParams.get("template")
@@ -234,6 +477,7 @@ function EditorPageContent() {
 
         setCurrentCV(nextCV)
         setLastSavedFingerprint(fingerprintCV(nextCV))
+        markVersionSnapshot(nextCV)
         if (nextCV === loaded) {
           setStatusMessage(`Loaded ${loaded.personalInfo.firstName || "CV"}`)
         }
@@ -295,6 +539,7 @@ function EditorPageContent() {
       if (window.confirm("A local draft was found. Restore it?")) {
         setCurrentCV(parsedDraft.cv)
         setLastSavedFingerprint(fingerprintCV(parsedDraft.cv))
+        markVersionSnapshot(parsedDraft.cv)
         setStatusMessage("Local draft restored")
       }
     } catch {
@@ -319,7 +564,7 @@ function EditorPageContent() {
           })
         )
 
-        if (!isSavingCV && statusMessage !== "Unsaved changes") {
+        if (!isSavingCV && !isAutoSavingCV && statusMessage !== "Unsaved changes") {
           setStatusMessage((prev) => (prev.startsWith("Saved ") ? prev : "Draft saved locally"))
         }
       } catch {
@@ -330,10 +575,10 @@ function EditorPageContent() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [currentCV, draftStorageKey, isHydrated, isLoadingCV, isSavingCV, statusMessage])
+  }, [currentCV, draftStorageKey, isHydrated, isLoadingCV, isSavingCV, isAutoSavingCV, statusMessage])
 
   useEffect(() => {
-    if (!isHydrated || isLoadingCV || isSavingCV) {
+    if (!isHydrated || isLoadingCV || isSavingCV || isAutoSavingCV) {
       return
     }
 
@@ -345,7 +590,78 @@ function EditorPageContent() {
     if (changed) {
       setStatusMessage("Unsaved changes")
     }
-  }, [currentCV, isHydrated, isLoadingCV, isSavingCV, lastSavedFingerprint])
+  }, [currentCV, isHydrated, isLoadingCV, isSavingCV, isAutoSavingCV, lastSavedFingerprint])
+
+  useEffect(() => {
+    if (!isHydrated || isLoadingCV || isSavingCV) {
+      return
+    }
+
+    const existingId = currentCvIdParam || currentCV.id
+    if (!existingId || !lastSavedFingerprint) {
+      return
+    }
+
+    const nextFingerprint = fingerprintCV(currentCV)
+    if (nextFingerprint === lastSavedFingerprint) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        setIsAutoSavingCV(true)
+        setStatusMessage("Autosaving...")
+
+        try {
+          const autoSavedCV = await saveCVRecord({
+            ...currentCV,
+            id: existingId,
+          })
+          setLastSavedFingerprint(nextFingerprint)
+          setStatusMessage(`Autosaved ${new Date().toLocaleTimeString()}`)
+
+          const enoughTimePassed =
+            Date.now() - lastAutoSnapshotAtRef.current >= AUTO_SNAPSHOT_INTERVAL_MS
+          const isNewSnapshotContent =
+            lastAutoSnapshotFingerprintRef.current !== nextFingerprint
+
+          if (enoughTimePassed && isNewSnapshotContent) {
+            try {
+              await createCVVersionSnapshot({
+                cvId: existingId,
+                cv: autoSavedCV,
+                changeSummary: "Autosave snapshot",
+              })
+              markVersionSnapshot(autoSavedCV)
+
+              if (showHistory && currentCV.id === existingId) {
+                const entries = await listCVVersions(existingId)
+                setHistoryEntries(entries)
+              }
+            } catch {
+              // Optional during rollout.
+            }
+          }
+        } catch {
+          setStatusMessage("Auto-save failed")
+        } finally {
+          setIsAutoSavingCV(false)
+        }
+      })()
+    }, AUTO_SAVE_DEBOUNCE_MS)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [
+    currentCV,
+    currentCvIdParam,
+    isHydrated,
+    isLoadingCV,
+    isSavingCV,
+    lastSavedFingerprint,
+    showHistory,
+  ])
 
   useEffect(() => {
     if (!showHistory || !currentCV.id) {
@@ -377,6 +693,114 @@ function EditorPageContent() {
     }
   }, [currentCV.id, showHistory])
 
+  useEffect(() => {
+    if (!showHistory) {
+      setSelectedHistoryEntry(null)
+      setSelectedHistorySnapshot(null)
+      setIsLoadingHistorySnapshot(false)
+    }
+  }, [showHistory])
+
+  const loadHistorySnapshotById = async (versionId: string) => {
+    const cached = historySnapshotCacheRef.current[versionId]
+    if (cached) {
+      return cached
+    }
+
+    const snapshot = await getCVVersionSnapshot(versionId)
+    if (snapshot) {
+      historySnapshotCacheRef.current[versionId] = snapshot
+    }
+    return snapshot
+  }
+
+  const handleCompareHistoryEntry = async (entry: EditorHistoryEntry) => {
+    setSelectedHistoryEntry(entry)
+    setSelectedHistorySnapshot(null)
+    setIsLoadingHistorySnapshot(true)
+
+    try {
+      const snapshot = await loadHistorySnapshotById(entry.id)
+      setSelectedHistorySnapshot(snapshot)
+      setStatusMessage(snapshot ? "Loaded version snapshot" : "Version snapshot unavailable")
+    } catch (error) {
+      setSelectedHistorySnapshot(null)
+      setStatusMessage(
+        error instanceof Error ? `History load failed: ${error.message}` : "History load failed"
+      )
+    } finally {
+      setIsLoadingHistorySnapshot(false)
+    }
+  }
+
+  const handleRestoreHistoryEntry = async (entry: EditorHistoryEntry) => {
+    setIsLoadingHistorySnapshot(true)
+
+    try {
+      const snapshot = await loadHistorySnapshotById(entry.id)
+      if (!snapshot) {
+        setStatusMessage("Selected version snapshot is unavailable")
+        return
+      }
+
+      const confirmed = window.confirm(
+        "Restore this version into the current draft? This will replace unsaved changes in the editor."
+      )
+      if (!confirmed) {
+        return
+      }
+
+      const restoredCV: CV = {
+        ...snapshot,
+        id: currentCV.id || snapshot.id,
+        createdAt: snapshot.createdAt || currentCV.createdAt,
+        updatedAt: new Date().toISOString(),
+      }
+
+      setCurrentCV(restoredCV)
+      setStatusMessage("Version restored to draft (save to persist)")
+
+      const nextParams = new URLSearchParams(searchParams.toString())
+      if (restoredCV.id) {
+        nextParams.set("id", restoredCV.id)
+      }
+      nextParams.set("template", restoredCV.templateId)
+      router.replace(`/editor?${nextParams.toString()}`)
+      setShowHistory(false)
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? `Restore failed: ${error.message}` : "Restore failed"
+      )
+    } finally {
+      setIsLoadingHistorySnapshot(false)
+    }
+  }
+
+  const handleCreateCheckpoint = async () => {
+    if (!currentCV.id) {
+      setStatusMessage("Save this CV before creating a checkpoint")
+      return
+    }
+
+    setStatusMessage("Creating checkpoint...")
+    try {
+      await createCVVersionSnapshot({
+        cvId: currentCV.id,
+        cv: currentCV,
+        changeSummary: "Manual checkpoint",
+      })
+      markVersionSnapshot(currentCV)
+
+      setStatusMessage("Checkpoint created")
+      if (showHistory) {
+        const entries = await listCVVersions(currentCV.id)
+        setHistoryEntries(entries)
+      }
+    } catch {
+      setStatusMessage("Checkpoint failed")
+    }
+  }
+
   const handleExportJSON = () => {
     const blob = new Blob([stringifyCVImportEnvelope(currentCV)], {
       type: "application/json",
@@ -395,6 +819,42 @@ function EditorPageContent() {
     setStatusMessage("Exported JSON")
   }
 
+  const applyImportedCV = (envelope: CVImportEnvelope, mode: "replace" | "new") => {
+    const now = new Date().toISOString()
+    const keepCurrentId = mode === "replace" ? currentCvIdParam || currentCV.id || "" : ""
+    const nextCV: CV = {
+      ...envelope.cv,
+      id: keepCurrentId,
+      updatedAt: now,
+      createdAt:
+        mode === "replace"
+          ? currentCV.createdAt || envelope.cv.createdAt || now
+          : envelope.cv.createdAt || now,
+    }
+
+    setCurrentCV(nextCV)
+    loadedCvIdRef.current = keepCurrentId || null
+    setLastSavedFingerprint(mode === "replace" ? null : fingerprintCV(nextCV))
+
+    const nextParams = new URLSearchParams(searchParams.toString())
+    if (keepCurrentId) {
+      nextParams.set("id", keepCurrentId)
+    } else {
+      nextParams.delete("id")
+    }
+    nextParams.set("template", nextCV.templateId)
+    router.replace(`/editor?${nextParams.toString()}`)
+
+    setStatusMessage(
+      mode === "replace"
+        ? "Imported JSON and replaced current draft (save to persist)"
+        : "Imported JSON as a new draft"
+    )
+    setShowImportPreview(false)
+    setPendingImportEnvelope(null)
+    setPendingImportFileName("")
+  }
+
   const handleImportJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) {
@@ -404,19 +864,10 @@ function EditorPageContent() {
     try {
       const content = await file.text()
       const imported = parseCVImportEnvelope(content)
-      setCurrentCV({
-        ...imported.cv,
-        id: "",
-        updatedAt: new Date().toISOString(),
-        createdAt: imported.cv.createdAt || new Date().toISOString(),
-      })
-      loadedCvIdRef.current = null
-      setLastSavedFingerprint(fingerprintCV(imported.cv))
-      setStatusMessage("Imported JSON into current draft")
-      const nextParams = new URLSearchParams(searchParams.toString())
-      nextParams.delete("id")
-      nextParams.set("template", imported.cv.templateId)
-      router.replace(`/editor?${nextParams.toString()}`)
+      setPendingImportEnvelope(imported)
+      setPendingImportFileName(file.name)
+      setShowImportPreview(true)
+      setStatusMessage("Import ready for review")
     } catch (error) {
       setStatusMessage(error instanceof Error ? `Import failed: ${error.message}` : "Import failed")
     } finally {
@@ -435,6 +886,95 @@ function EditorPageContent() {
     const keywords = extractJobKeywords(currentCV.targeting?.jobDescription ?? "")
     updateTargetingField("extractedKeywords", keywords)
     setStatusMessage(keywords.length ? "Extracted job keywords" : "No keywords extracted")
+  }
+
+  const handleCopyKeywords = async (keywords: string[]) => {
+    if (keywords.length === 0) {
+      setStatusMessage("No keywords to copy")
+      return
+    }
+
+    const text = keywords.join(", ")
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        setStatusMessage("Copied keywords to clipboard")
+        return
+      }
+    } catch {
+      // Fall back below.
+    }
+
+    try {
+      const textarea = document.createElement("textarea")
+      textarea.value = text
+      textarea.setAttribute("readonly", "")
+      textarea.style.position = "fixed"
+      textarea.style.left = "-9999px"
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textarea)
+      setStatusMessage("Copied keywords to clipboard")
+    } catch {
+      setStatusMessage("Copy failed")
+    }
+  }
+
+  const handleAppendMissingKeywordsToSummary = (keywords: string[]) => {
+    if (keywords.length === 0) {
+      setStatusMessage("No missing keywords to append")
+      return
+    }
+
+    const existing = currentCV.summary.trim()
+    const suffix = keywords.join(", ")
+    const nextSummary = existing
+      ? `${existing}\n\nKeywords: ${suffix}`
+      : `Keywords: ${suffix}`
+
+    updateSummary(nextSummary)
+    setStatusMessage("Appended missing keywords to summary")
+  }
+
+  const handleAddMissingKeywordsAsSkills = (keywords: string[]) => {
+    if (keywords.length === 0) {
+      setStatusMessage("No missing keywords to add")
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Add ${keywords.length} missing keyword${keywords.length === 1 ? "" : "s"} as technical skills?`
+    )
+    if (!confirmed) {
+      return
+    }
+
+    const existingNames = new Set(
+      currentCV.skills.map((skill) => skill.name.trim().toLowerCase()).filter(Boolean)
+    )
+    const additions = keywords
+      .map((keyword) => keyword.trim())
+      .filter(Boolean)
+      .filter((keyword) => !existingNames.has(keyword.toLowerCase()))
+      .map((keyword) => ({
+        id: generateClientId(),
+        name: keyword,
+        level: "intermediate" as SkillLevel,
+        category: "technical" as SkillCategory,
+      }))
+
+    if (additions.length === 0) {
+      setStatusMessage("All missing keywords are already in skills")
+      return
+    }
+
+    setCurrentCV({
+      ...currentCV,
+      skills: [...currentCV.skills, ...additions],
+      updatedAt: new Date().toISOString(),
+    })
+    setStatusMessage(`Added ${additions.length} keyword${additions.length === 1 ? "" : "s"} to skills`)
   }
 
   const handleCreateTailoredVariant = () => {
@@ -464,6 +1004,53 @@ function EditorPageContent() {
     router.replace(`/editor?${nextParams.toString()}`)
   }
 
+  const cloneDraftAsNew = (templateId: TemplateId, modeLabel: "duplicate" | "template") => {
+    const now = new Date().toISOString()
+    const baseCvId = currentCvIdParam || currentCV.id || currentCV.variantMeta?.baseCvId
+    const nextCV: CV = {
+      ...currentCV,
+      id: "",
+      templateId,
+      variantMeta: {
+        ...(currentCV.variantMeta ?? {}),
+        baseCvId: baseCvId || undefined,
+        sourceTemplateId: currentTemplate,
+      },
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    setCurrentCV(nextCV)
+    loadedCvIdRef.current = null
+    setLastSavedFingerprint(fingerprintCV(nextCV))
+
+    const nextParams = new URLSearchParams(searchParams.toString())
+    nextParams.delete("id")
+    nextParams.set("template", templateId)
+    router.replace(`/editor?${nextParams.toString()}`)
+
+    setStatusMessage(
+      modeLabel === "duplicate"
+        ? "Duplicated current draft as a new draft"
+        : `Cloned current draft into ${templateId} template`
+    )
+  }
+
+  const handleDuplicateDraft = () => {
+    cloneDraftAsNew(currentTemplate, "duplicate")
+  }
+
+  const handleCloneAsNewTemplate = (templateId: TemplateId) => {
+    cloneDraftAsNew(templateId, "template")
+    setShowTemplateSelector(false)
+    setTemplateSelectorMode("apply")
+  }
+
+  const openTemplateDialog = (mode: "apply" | "clone") => {
+    setTemplateSelectorMode(mode)
+    setShowTemplateSelector(true)
+  }
+
   async function handleSaveCV() {
     setIsSavingCV(true)
     setStatusMessage("Saving...")
@@ -487,6 +1074,7 @@ function EditorPageContent() {
           cv: savedCV,
           changeSummary: summarizeCVChanges(previousSnapshot, savedCV),
         })
+        markVersionSnapshot(savedCV)
       } catch {
         // Version snapshots are optional during schema rollout.
       }
@@ -550,6 +1138,46 @@ function EditorPageContent() {
     }
   }, [isHydrated])
 
+  const extractedKeywords = currentCV.targeting?.extractedKeywords ?? []
+  const keywordCorpus = buildKeywordCorpus(currentCV)
+  const presentKeywords = extractedKeywords.filter((keyword) =>
+    keywordCorpus.includes(keyword.toLowerCase())
+  )
+  const missingKeywords = extractedKeywords.filter(
+    (keyword) => !keywordCorpus.includes(keyword.toLowerCase())
+  )
+  const importPreviewCV = pendingImportEnvelope?.cv ?? null
+  const hasCurrentDraftContent = hasMeaningfulCVData(currentCV)
+  const importWillOverwriteExisting = hasCurrentDraftContent
+  const canReplaceCurrentDraft = Boolean(importPreviewCV)
+  const presentation = currentCV.presentation ?? {
+    sectionOrder: [...sectionKeys],
+    hiddenSections: [],
+    density: "comfortable" as const,
+    fontScale: "md" as const,
+    accentVariant: "",
+  }
+  const hiddenSectionSet = new Set<SectionKey>(presentation.hiddenSections)
+  const stepStatuses = steps.map((step) => ({
+    id: step.id,
+    status: getStepCompletionStatus(currentCV, step.id),
+  }))
+  const completedSteps = stepStatuses.filter((item) => item.status === "complete").length
+  const startedSteps = stepStatuses.filter((item) => item.status !== "empty").length
+  const editorStatusTone = getEditorStatusTone(statusMessage)
+  const statusPillClass = cn(
+    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+    editorStatusTone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+    editorStatusTone === "warning" && "border-amber-200 bg-amber-50 text-amber-800",
+    editorStatusTone === "error" && "border-red-200 bg-red-50 text-red-700",
+    editorStatusTone === "info" && "border-blue-200 bg-blue-50 text-blue-700",
+    editorStatusTone === "neutral" && "border-slate-200 bg-slate-50 text-slate-700"
+  )
+  const historyCompareRows = selectedHistorySnapshot
+    ? buildHistoryCompareRows(selectedHistorySnapshot, currentCV)
+    : []
+  const changedHistoryCompareRows = historyCompareRows.filter((row) => row.changed)
+
   if (!isHydrated || isLoadingCV) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -590,7 +1218,13 @@ function EditorPageContent() {
               <p className="text-muted-foreground text-sm sm:text-base">
                 Fill in your information to create your CV
               </p>
-              <p className="text-xs text-muted-foreground mt-1">{statusMessage}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className={statusPillClass}>
+                  {(isSavingCV || isAutoSavingCV) && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {isSavingCV ? "Saving" : isAutoSavingCV ? "Autosaving" : "Status"}
+                </span>
+                <p className="text-xs text-muted-foreground">{statusMessage}</p>
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:justify-end">
               <input
@@ -655,6 +1289,25 @@ function EditorPageContent() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={handleDuplicateDraft}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm"
+              >
+                <Copy className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <span className="hidden sm:inline">Duplicate</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCreateCheckpoint}
+                disabled={!currentCV.id}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm"
+              >
+                <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <span className="hidden sm:inline">Checkpoint</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowHistory(true)}
                 className="flex-1 sm:flex-initial text-xs sm:text-sm"
               >
@@ -670,7 +1323,25 @@ function EditorPageContent() {
                 <Target className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 <span className="hidden sm:inline">Targeting</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowTemplateSelector(true)} className="flex-1 sm:flex-initial text-xs sm:text-sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLayoutStyle(true)}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm"
+              >
+                <SlidersHorizontal className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <span className="hidden sm:inline">Layout</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openTemplateDialog("clone")}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm"
+              >
+                <Copy className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <span className="hidden sm:inline">Clone Template</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => openTemplateDialog("apply")} className="flex-1 sm:flex-initial text-xs sm:text-sm">
                 <Palette className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 <span className="hidden sm:inline">Templates</span>
               </Button>
@@ -684,11 +1355,25 @@ function EditorPageContent() {
 
           {/* Progress Steps */}
           <div className="mb-8 overflow-x-auto">
+            <div className="mb-2 text-xs text-muted-foreground">
+              Section progress: {completedSteps}/{steps.length} complete, {startedSteps}/{steps.length} started
+            </div>
             <div className="flex items-center gap-1 sm:gap-2 min-w-max pb-2">
               {steps.map((step, index) => (
+                (() => {
+                  const stepStatus = stepStatuses.find((item) => item.id === step.id)?.status ?? "empty"
+                  const statusDotClass =
+                    stepStatus === "complete"
+                      ? "bg-emerald-500"
+                      : stepStatus === "partial"
+                        ? "bg-amber-500"
+                        : "bg-slate-300"
+
+                  return (
                 <button
                   key={step.id}
                   onClick={() => setCurrentStep(index)}
+                  title={`${step.label}: ${stepStatus}`}
                   className={cn(
                     "flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg transition-colors whitespace-nowrap",
                     index === currentStep
@@ -699,8 +1384,21 @@ function EditorPageContent() {
                   )}
                 >
                   <step.icon className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "inline-block h-1.5 w-1.5 rounded-full",
+                      index === currentStep && stepStatus === "empty"
+                        ? "bg-primary-foreground/70"
+                        : index === currentStep && stepStatus !== "empty"
+                          ? "bg-primary-foreground"
+                          : statusDotClass
+                    )}
+                  />
                   <span className="text-xs sm:text-sm font-medium hidden xs:inline">{step.label}</span>
                 </button>
+                  )
+                })()
               ))}
             </div>
           </div>
@@ -1281,17 +1979,195 @@ function EditorPageContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Template Selector Dialog */}
-      <Dialog open={showTemplateSelector} onOpenChange={setShowTemplateSelector}>
+      <Dialog open={showLayoutStyle} onOpenChange={setShowLayoutStyle}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95%] sm:w-full">
           <DialogHeader className="pb-2">
-            <DialogTitle className="text-lg sm:text-xl">Choose a Template</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">Layout & Style</DialogTitle>
             <DialogDescription className="text-sm">
-              Select a template for your CV. You can change this anytime.
+              Control section visibility/order and PDF density/font size. Hidden sections also affect the HTML preview.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="density">Density (PDF)</Label>
+                <select
+                  id="density"
+                  value={presentation.density}
+                  onChange={(e) =>
+                    updatePresentation({
+                      density:
+                        e.target.value === "compact" ? "compact" : "comfortable",
+                    })
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3"
+                >
+                  <option value="comfortable">Comfortable</option>
+                  <option value="compact">Compact</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fontScale">Font Scale (PDF)</Label>
+                <select
+                  id="fontScale"
+                  value={presentation.fontScale}
+                  onChange={(e) =>
+                    updatePresentation({
+                      fontScale:
+                        e.target.value === "sm"
+                          ? "sm"
+                          : e.target.value === "lg"
+                            ? "lg"
+                            : "md",
+                    })
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3"
+                >
+                  <option value="sm">Small</option>
+                  <option value="md">Medium</option>
+                  <option value="lg">Large</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="accentVariant">Accent Variant (template-specific token)</Label>
+              <Input
+                id="accentVariant"
+                placeholder="Optional token (future template variants)"
+                value={presentation.accentVariant ?? ""}
+                onChange={(e) => updatePresentation({ accentVariant: e.target.value })}
+              />
+            </div>
+
+            <div className="rounded-md border p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h4 className="font-medium">Section Visibility</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Toggle sections on/off. Hiding `Header / Personal Info` removes the PDF header block.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => updatePresentation({ hiddenSections: [] })}
+                >
+                  Show All
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {sectionKeys.map((key) => {
+                  const hidden = hiddenSectionSet.has(key)
+                  return (
+                    <div key={key} className="flex items-center justify-between rounded-md border px-3 py-2">
+                      <span className="text-sm">{sectionLabels[key]}</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={hidden ? "outline" : "default"}
+                        onClick={() => toggleSectionVisibility(key)}
+                      >
+                        {hidden ? "Show" : "Hide"}
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-md border p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h4 className="font-medium">Section Order</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Section order is applied to PDF output. Split templates keep main/side columns but respect order within each column group.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    updatePresentation({
+                      sectionOrder: [...sectionKeys],
+                    })
+                  }
+                >
+                  Reset Order
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {presentation.sectionOrder.map((key, index) => (
+                  <div key={`${key}-${index}`} className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div>
+                      <p className="text-sm">{sectionLabels[key]}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {key === "personal" ? "PDF header block (stays visually at top when visible)" : "Content section"}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={index === 0}
+                        onClick={() => moveSectionOrder(key, "up")}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={index === presentation.sectionOrder.length - 1}
+                        onClick={() => moveSectionOrder(key, "down")}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Selector Dialog */}
+      <Dialog
+        open={showTemplateSelector}
+        onOpenChange={(open) => {
+          setShowTemplateSelector(open)
+          if (!open) {
+            setTemplateSelectorMode("apply")
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95%] sm:w-full">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-lg sm:text-xl">
+              {templateSelectorMode === "clone" ? "Clone as New Template" : "Choose a Template"}
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              {templateSelectorMode === "clone"
+                ? "Pick a template to create a new draft clone with the same content."
+                : "Select a template for your CV. You can change this anytime."}
             </DialogDescription>
           </DialogHeader>
           <div className="mt-2">
-            <TemplateSelector onSelect={() => setShowTemplateSelector(false)} />
+            <TemplateSelector
+              mode={templateSelectorMode}
+              onSelect={(templateId) => {
+                if (templateSelectorMode === "clone") {
+                  handleCloneAsNewTemplate(templateId)
+                  return
+                }
+                setShowTemplateSelector(false)
+              }}
+            />
           </div>
         </DialogContent>
       </Dialog>
@@ -1318,17 +2194,287 @@ function EditorPageContent() {
               No version snapshots yet.
             </div>
           ) : (
-            <div className="space-y-3">
-              {historyEntries.map((entry) => (
-                <div key={entry.id} className="rounded-md border p-3">
-                  <p className="text-sm font-medium">
-                    {entry.changeSummary || "Saved changes"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(entry.createdAt).toLocaleString()}
-                  </p>
+            <div className="space-y-4">
+              {selectedHistoryEntry && (
+                <div className="rounded-md border bg-muted/20 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">Compare Snapshot</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(selectedHistoryEntry.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedHistoryEntry(null)
+                        setSelectedHistorySnapshot(null)
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+
+                  {isLoadingHistorySnapshot ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading snapshot...
+                    </div>
+                  ) : !selectedHistorySnapshot ? (
+                    <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                      Snapshot data is unavailable for this version.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-md border p-3">
+                          <p className="text-xs text-muted-foreground mb-1">Current Draft</p>
+                          <p className="font-medium">
+                            {[currentCV.personalInfo.firstName, currentCV.personalInfo.lastName]
+                              .map((part) => part.trim())
+                              .filter(Boolean)
+                              .join(" ") || "Untitled CV"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Template: {currentCV.templateId}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Exp/Edu/Skills: {currentCV.experience.length}/{currentCV.education.length}/
+                            {currentCV.skills.length}
+                          </p>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <p className="text-xs text-muted-foreground mb-1">Selected Version</p>
+                          <p className="font-medium">
+                            {[selectedHistorySnapshot.personalInfo.firstName, selectedHistorySnapshot.personalInfo.lastName]
+                              .map((part) => part.trim())
+                              .filter(Boolean)
+                              .join(" ") || "Untitled CV"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Template: {selectedHistorySnapshot.templateId}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Exp/Edu/Skills: {selectedHistorySnapshot.experience.length}/
+                            {selectedHistorySnapshot.education.length}/{selectedHistorySnapshot.skills.length}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-md border p-3 text-sm">
+                        <p className="font-medium">Detected changes</p>
+                        <p className="text-muted-foreground mt-1">
+                          {summarizeCVChanges(selectedHistorySnapshot, currentCV)}
+                        </p>
+                        {historyCompareRows.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="rounded-full border bg-background px-2 py-0.5">
+                                {changedHistoryCompareRows.length} changed field
+                                {changedHistoryCompareRows.length === 1 ? "" : "s"}
+                              </span>
+                              <span className="rounded-full border bg-background px-2 py-0.5">
+                                {historyCompareRows.length - changedHistoryCompareRows.length} unchanged
+                              </span>
+                            </div>
+                            <div className="space-y-1">
+                              {historyCompareRows.map((row) => (
+                                <div
+                                  key={row.label}
+                                  className={cn(
+                                    "rounded-md border px-2 py-2 text-xs",
+                                    row.changed
+                                      ? "border-amber-200 bg-amber-50/70"
+                                      : "border-slate-200 bg-slate-50/60"
+                                  )}
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="font-medium">{row.label}</span>
+                                    <span
+                                      className={cn(
+                                        "rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide",
+                                        row.changed
+                                          ? "bg-amber-100 text-amber-800"
+                                          : "bg-slate-200 text-slate-700"
+                                      )}
+                                    >
+                                      {row.changed ? "Changed" : "Same"}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                                    <div>
+                                      <p className="text-[10px] text-muted-foreground">Snapshot</p>
+                                      <p className="break-words">{row.previous}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-muted-foreground">Current</p>
+                                      <p className="break-words">{row.current}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button
+                          type="button"
+                          onClick={() => void handleRestoreHistoryEntry(selectedHistoryEntry)}
+                          disabled={isLoadingHistorySnapshot}
+                        >
+                          Restore to Draft
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void handleCompareHistoryEntry(selectedHistoryEntry)}
+                          disabled={isLoadingHistorySnapshot}
+                        >
+                          Reload Snapshot
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
-              ))}
+              )}
+
+              <div className="space-y-3">
+                {historyEntries.map((entry) => (
+                  <div key={entry.id} className="rounded-md border p-3">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {entry.changeSummary || "Saved changes"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(entry.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleCompareHistoryEntry(entry)}
+                        >
+                          Compare
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void handleRestoreHistoryEntry(entry)}
+                        >
+                          Restore
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showImportPreview}
+        onOpenChange={(open) => {
+          setShowImportPreview(open)
+          if (!open) {
+            setPendingImportEnvelope(null)
+            setPendingImportFileName("")
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95%] sm:w-full">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-lg sm:text-xl">Review Import</DialogTitle>
+            <DialogDescription className="text-sm">
+              Confirm how you want to apply this JSON import before changing your current draft.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!importPreviewCV ? (
+            <div className="rounded-md border p-4 text-sm text-muted-foreground">
+              No import payload loaded.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-md border p-4 space-y-2">
+                <p className="text-sm font-medium">
+                  {pendingImportFileName || "Imported JSON"}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Name</p>
+                    <p className="font-medium">
+                      {[importPreviewCV.personalInfo.firstName, importPreviewCV.personalInfo.lastName]
+                        .map((part) => part.trim())
+                        .filter(Boolean)
+                        .join(" ") || "Untitled CV"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Template</p>
+                    <p className="font-medium capitalize">{importPreviewCV.templateId}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Summary Length</p>
+                    <p>{importPreviewCV.summary.trim().length} chars</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Sections</p>
+                    <p>
+                      Exp {importPreviewCV.experience.length} • Edu {importPreviewCV.education.length} • Skills{" "}
+                      {importPreviewCV.skills.length}
+                    </p>
+                  </div>
+                </div>
+                {importWillOverwriteExisting && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    Replacing the current draft will overwrite the editor content currently loaded. Save/export first if you want a backup.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  type="button"
+                  onClick={() => pendingImportEnvelope && applyImportedCV(pendingImportEnvelope, "new")}
+                >
+                  Import as New Draft
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!canReplaceCurrentDraft}
+                  onClick={() => pendingImportEnvelope && applyImportedCV(pendingImportEnvelope, "replace")}
+                >
+                  Replace Current Draft
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowImportPreview(false)
+                    setPendingImportEnvelope(null)
+                    setPendingImportFileName("")
+                    setStatusMessage("Import cancelled")
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+
+              {!importWillOverwriteExisting && (
+                <p className="text-xs text-muted-foreground">
+                  Replacing is safest when you intend to overwrite the current editor content. Use `Import as New Draft` to avoid replacing this draft.
+                </p>
+              )}
             </div>
           )}
         </DialogContent>
@@ -1386,24 +2532,99 @@ function EditorPageContent() {
             <div className="space-y-2">
               <Label>Extracted Keywords</Label>
               <div className="min-h-14 rounded-md border bg-muted/30 p-3">
-                {(currentCV.targeting?.extractedKeywords?.length ?? 0) === 0 ? (
+                {extractedKeywords.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No keywords extracted yet.
                   </p>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {currentCV.targeting?.extractedKeywords.map((keyword) => (
-                      <span
-                        key={keyword}
-                        className="inline-flex rounded-full border bg-background px-2 py-1 text-xs"
-                      >
-                        {keyword}
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Coverage:</span>
+                      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800">
+                        Present {presentKeywords.length}
                       </span>
-                    ))}
+                      <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                        Missing {missingKeywords.length}
+                      </span>
+                    </div>
+
+                    {presentKeywords.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">Present in CV content</p>
+                        <div className="flex flex-wrap gap-2">
+                          {presentKeywords.map((keyword) => (
+                            <span
+                              key={`present-${keyword}`}
+                              className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800"
+                            >
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {missingKeywords.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">Missing from CV content</p>
+                        <div className="flex flex-wrap gap-2">
+                          {missingKeywords.map((keyword) => (
+                            <span
+                              key={`missing-${keyword}`}
+                              className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900"
+                            >
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
+
+            {extractedKeywords.length > 0 && (
+              <div className="space-y-2">
+                <Label>Keyword Actions</Label>
+                <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleCopyKeywords(extractedKeywords)}
+                  >
+                    Copy All Keywords
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleCopyKeywords(missingKeywords)}
+                    disabled={missingKeywords.length === 0}
+                  >
+                    Copy Missing Keywords
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleAppendMissingKeywordsToSummary(missingKeywords)}
+                    disabled={missingKeywords.length === 0}
+                  >
+                    Append Missing to Summary
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleAddMissingKeywordsAsSkills(missingKeywords)}
+                    disabled={missingKeywords.length === 0}
+                  >
+                    Add Missing as Skills
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Coverage is a best-effort text match across summary, experience, education, skills, certifications, and languages.
+                </p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
