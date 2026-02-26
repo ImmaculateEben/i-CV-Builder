@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Mail, Lock, User } from "lucide-react"
+import { Loader2, Mail, Lock } from "lucide-react"
 
 export default function RegisterPage() {
   const router = useRouter()

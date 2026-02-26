@@ -4,7 +4,6 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { FileText, Menu, X } from "lucide-react"
 import { useState } from "react"
-import { cn } from "@/lib/utils"
 
 interface NavbarProps {
   isLoggedIn?: boolean

@@ -1,114 +1,152 @@
-import { CV } from "@/types/cv"
+import type { ReactNode } from "react"
+import type { CV } from "@/types/cv"
+import {
+  fallbackDescriptionLines,
+  formatDateRange,
+  getContactItems,
+  getFullName,
+  getLinkItems,
+  groupSkills,
+  joinNonEmpty,
+} from "./template-utils"
 
 interface ProfessionalTemplateProps {
   cv: CV
 }
 
+function ProfessionalSection({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <section className="mb-6">
+      <h2 className="mb-3 border-b border-stone-300 pb-1 text-lg font-semibold tracking-[0.18em] text-stone-900">
+        {title}
+      </h2>
+      {children}
+    </section>
+  )
+}
+
 export function ProfessionalTemplate({ cv }: ProfessionalTemplateProps) {
-  const { personalInfo, summary, experience, education, skills, certifications } = cv
+  const { summary, experience, education, skills, certifications, languages } = cv
+  const contactLine = joinNonEmpty(getContactItems(cv))
+  const linkLine = joinNonEmpty(getLinkItems(cv).map((item) => item.display))
+  const groupedSkills = groupSkills(skills)
 
   return (
-    <div className="max-w-[800px] mx-auto bg-white text-gray-900 p-8 shadow-lg">
-      {/* Header - Traditional Style */}
-      <header className="text-center border-b border-gray-300 pb-6 mb-6">
-        <h1 className="text-4xl font-serif font-bold text-gray-900 uppercase tracking-wider">
-          {personalInfo.firstName} {personalInfo.lastName}
+    <div className="mx-auto max-w-[800px] border border-stone-300 bg-white p-8 text-stone-900 shadow-lg shadow-stone-300/40">
+      <header className="mb-8 border-b-2 border-stone-800 pb-5 text-center">
+        <h1 className="font-serif text-4xl font-bold uppercase tracking-[0.12em]">
+          {getFullName(cv)}
         </h1>
-        <p className="text-lg text-gray-600 mt-2">
-          {personalInfo.email} | {personalInfo.phone} | {personalInfo.address}
-        </p>
-        {(personalInfo.linkedIn || personalInfo.portfolioUrl) && (
-          <p className="text-gray-600 mt-1">
-            {personalInfo.linkedIn} {personalInfo.linkedIn && personalInfo.portfolioUrl && "|"} {personalInfo.portfolioUrl}
-          </p>
-        )}
+        {contactLine && <p className="mt-2 text-sm text-stone-700">{contactLine}</p>}
+        {linkLine && <p className="mt-1 text-sm text-stone-700">{linkLine}</p>}
       </header>
 
-      {/* Summary */}
-      {summary && (
-        <section className="mb-6">
-          <h2 className="text-xl font-serif font-bold text-gray-900 border-b border-gray-300 pb-1 mb-3">
-            SUMMARY
-          </h2>
-          <p className="text-gray-700 leading-relaxed text-justify">{summary}</p>
-        </section>
+      {summary.trim() && (
+        <ProfessionalSection title="PROFESSIONAL SUMMARY">
+          <p className="text-sm leading-6 text-justify text-stone-800">{summary}</p>
+        </ProfessionalSection>
       )}
 
-      {/* Experience */}
       {experience.length > 0 && (
-        <section className="mb-6">
-          <h2 className="text-xl font-serif font-bold text-gray-900 border-b border-gray-300 pb-1 mb-3">
-            PROFESSIONAL EXPERIENCE
-          </h2>
-          <div className="space-y-4">
+        <ProfessionalSection title="PROFESSIONAL EXPERIENCE">
+          <div className="space-y-5">
             {experience.map((exp) => (
-              <div key={exp.id}>
-                <div className="flex justify-between items-baseline">
-                  <h3 className="font-bold text-gray-900">{exp.company}</h3>
-                  <span className="text-gray-600 italic">
-                    {exp.startDate} - {exp.current ? "Present" : exp.endDate}
-                  </span>
-                </div>
-                <p className="text-gray-700 font-semibold">{exp.position}</p>
-                {exp.description && (
-                  <p className="mt-1 text-gray-700 text-sm">{exp.description}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Education */}
-      {education.length > 0 && (
-        <section className="mb-6">
-          <h2 className="text-xl font-serif font-bold text-gray-900 border-b border-gray-300 pb-1 mb-3">
-            EDUCATION
-          </h2>
-          <div className="space-y-3">
-            {education.map((edu) => (
-              <div key={edu.id} className="flex justify-between items-baseline">
-                <div>
-                  <h3 className="font-bold text-gray-900">{edu.institution}</h3>
-                  <p className="text-gray-700">
-                    {edu.degree} in {edu.field}
+              <article key={exp.id}>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="font-semibold text-stone-900">{exp.company}</h3>
+                    <p className="text-sm font-medium text-stone-700">{exp.position}</p>
+                  </div>
+                  <p className="text-xs italic text-stone-600">
+                    {formatDateRange(exp.startDate, exp.endDate, exp.current)}
                   </p>
                 </div>
-                <span className="text-gray-600 italic">
-                  {edu.startDate} - {edu.current ? "Present" : edu.endDate}
+                {fallbackDescriptionLines(exp.description).length > 0 && (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-stone-800">
+                    {fallbackDescriptionLines(exp.description).map((line, index) => (
+                      <li key={`${exp.id}-${index}`}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            ))}
+          </div>
+        </ProfessionalSection>
+      )}
+
+      {education.length > 0 && (
+        <ProfessionalSection title="EDUCATION">
+          <div className="space-y-4">
+            {education.map((edu) => (
+              <article
+                key={edu.id}
+                className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div>
+                  <h3 className="font-semibold text-stone-900">{edu.institution}</h3>
+                  <p className="text-sm text-stone-700">
+                    {edu.degree}
+                    {edu.field.trim() ? ` in ${edu.field}` : ""}
+                  </p>
+                </div>
+                <p className="text-xs italic text-stone-600">
+                  {formatDateRange(edu.startDate, edu.endDate, edu.current)}
+                </p>
+              </article>
+            ))}
+          </div>
+        </ProfessionalSection>
+      )}
+
+      {skills.length > 0 && (
+        <ProfessionalSection title="SKILLS">
+          <div className="space-y-2 text-sm text-stone-800">
+            {groupedSkills.technical.length > 0 && (
+              <p>
+                <span className="font-semibold">Technical:</span>{" "}
+                {groupedSkills.technical.map((skill) => skill.name).join(" • ")}
+              </p>
+            )}
+            {groupedSkills.soft.length > 0 && (
+              <p>
+                <span className="font-semibold">Soft:</span>{" "}
+                {groupedSkills.soft.map((skill) => skill.name).join(" • ")}
+              </p>
+            )}
+          </div>
+        </ProfessionalSection>
+      )}
+
+      {certifications.length > 0 && (
+        <ProfessionalSection title="CERTIFICATIONS">
+          <div className="space-y-2 text-sm">
+            {certifications.map((cert) => (
+              <div key={cert.id} className="flex flex-col sm:flex-row sm:justify-between">
+                <span className="font-semibold text-stone-900">{cert.name}</span>
+                <span className="text-stone-700">
+                  {cert.issuer}
+                  {cert.date ? ` (${cert.date})` : ""}
                 </span>
               </div>
             ))}
           </div>
-        </section>
+        </ProfessionalSection>
       )}
 
-      {/* Skills */}
-      {skills.length > 0 && (
-        <section className="mb-6">
-          <h2 className="text-xl font-serif font-bold text-gray-900 border-b border-gray-300 pb-1 mb-3">
-            SKILLS
-          </h2>
-          <p className="text-gray-700">
-            {skills.map((s) => s.name).join(" • ")}
-          </p>
-        </section>
-      )}
-
-      {/* Certifications */}
-      {certifications.length > 0 && (
+      {languages.length > 0 && (
         <section>
-          <h2 className="text-xl font-serif font-bold text-gray-900 border-b border-gray-300 pb-1 mb-3">
-            CERTIFICATIONS
+          <h2 className="mb-3 border-b border-stone-300 pb-1 text-lg font-semibold tracking-[0.18em] text-stone-900">
+            LANGUAGES
           </h2>
-          <div className="space-y-2">
-            {certifications.map((cert) => (
-              <div key={cert.id} className="flex justify-between">
-                <span className="font-semibold text-gray-900">{cert.name}</span>
-                <span className="text-gray-600">{cert.issuer} ({cert.date})</span>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-stone-800">
+            {languages.map((lang) => `${lang.language} (${lang.proficiency})`).join(" • ")}
+          </p>
         </section>
       )}
     </div>

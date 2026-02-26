@@ -1,5 +1,33 @@
 // CV Data Types
 
+export const templateIds = [
+  "modern",
+  "professional",
+  "creative",
+  "nigerian",
+  "minimal",
+  "executive",
+  "tech",
+] as const
+
+export type TemplateId = (typeof templateIds)[number]
+
+export const isTemplateId = (value: string): value is TemplateId =>
+  (templateIds as readonly string[]).includes(value)
+
+export const sectionKeys = [
+  "personal",
+  "summary",
+  "experience",
+  "education",
+  "skills",
+  "certifications",
+  "languages",
+  "referees",
+] as const
+
+export type SectionKey = (typeof sectionKeys)[number]
+
 export interface PersonalInfo {
   firstName: string
   lastName: string
@@ -62,9 +90,31 @@ export interface Referee {
   relationship: string
 }
 
+export interface CVPresentation {
+  sectionOrder: SectionKey[]
+  hiddenSections: SectionKey[]
+  density: "comfortable" | "compact"
+  fontScale: "sm" | "md" | "lg"
+  accentVariant?: string
+}
+
+export interface CVTargeting {
+  targetRole: string
+  targetCompany: string
+  jobDescription: string
+  extractedKeywords: string[]
+  emphasisSections: SectionKey[]
+}
+
+export interface CVVariantMeta {
+  baseCvId?: string
+  variantLabel?: string
+  sourceTemplateId?: TemplateId
+}
+
 export interface CV {
   id: string
-  templateId: string
+  templateId: TemplateId
   personalInfo: PersonalInfo
   summary: string
   experience: WorkExperience[]
@@ -73,16 +123,11 @@ export interface CV {
   certifications: Certification[]
   languages: Language[]
   referees: Referee[]
+  presentation?: CVPresentation
+  targeting?: CVTargeting
+  variantMeta?: CVVariantMeta
   createdAt: string
   updatedAt: string
-}
-
-export type TemplateId = "modern" | "professional" | "creative" | "nigerian"
-
-export interface Template {
-  id: TemplateId
-  name: string
-  description: string
 }
 
 // Default empty CV
@@ -105,30 +150,21 @@ export const createEmptyCV = (): CV => ({
   certifications: [],
   languages: [],
   referees: [],
+  presentation: {
+    sectionOrder: [...sectionKeys],
+    hiddenSections: [],
+    density: "comfortable",
+    fontScale: "md",
+    accentVariant: "",
+  },
+  targeting: {
+    targetRole: "",
+    targetCompany: "",
+    jobDescription: "",
+    extractedKeywords: [],
+    emphasisSections: [],
+  },
+  variantMeta: {},
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 })
-
-// Template definitions
-export const templates: Template[] = [
-  {
-    id: "modern",
-    name: "Modern",
-    description: "Clean and contemporary design with a professional look",
-  },
-  {
-    id: "professional",
-    name: "Professional",
-    description: "Traditional and formal layout perfect for corporate roles",
-  },
-  {
-    id: "creative",
-    name: "Creative",
-    description: "Bold and unique design that stands out from the crowd",
-  },
-  {
-    id: "nigerian",
-    name: "Nigerian Regional",
-    description: "Tailored for the Nigerian job market with local preferences",
-  },
-]

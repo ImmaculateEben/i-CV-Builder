@@ -1,39 +1,77 @@
 import { create } from "zustand"
-import { CV, createEmptyCV, TemplateId } from "@/types/cv"
+import type { CV, SectionKey, TemplateId } from "@/types/cv"
+import { createEmptyCV } from "@/types/cv"
+
+type Direction = "up" | "down"
+
+const HISTORY_LIMIT = 50
+
+type WithId = { id: string }
 
 interface CVStore {
   // Current CV being edited
   currentCV: CV
-  
+
   // List of saved CVs (for dashboard)
   savedCVs: CV[]
-  
+
   // Current template
   currentTemplate: TemplateId
-  
+
+  // History state
+  undoStack: CV[]
+  redoStack: CV[]
+  canUndo: boolean
+  canRedo: boolean
+
   // Actions
   setCurrentCV: (cv: CV) => void
   updatePersonalInfo: (data: CV["personalInfo"]) => void
   updateSummary: (summary: string) => void
+  updatePresentation: (data: Partial<NonNullable<CV["presentation"]>>) => void
+  updateTargeting: (data: Partial<NonNullable<CV["targeting"]>>) => void
+  moveSectionOrder: (sectionKey: SectionKey, direction: Direction) => void
+  toggleSectionVisibility: (sectionKey: SectionKey) => void
+
   addExperience: () => void
-  updateExperience: (id: string, data: CV["experience"][0]) => void
+  updateExperience: (id: string, data: CV["experience"][number]) => void
   removeExperience: (id: string) => void
+  duplicateExperience: (id: string) => void
+  moveExperience: (id: string, direction: Direction) => void
+
   addEducation: () => void
-  updateEducation: (id: string, data: CV["education"][0]) => void
+  updateEducation: (id: string, data: CV["education"][number]) => void
   removeEducation: (id: string) => void
+  duplicateEducation: (id: string) => void
+  moveEducation: (id: string, direction: Direction) => void
+
   addSkill: () => void
-  updateSkill: (id: string, data: CV["skills"][0]) => void
+  updateSkill: (id: string, data: CV["skills"][number]) => void
   removeSkill: (id: string) => void
+  duplicateSkill: (id: string) => void
+  moveSkill: (id: string, direction: Direction) => void
+
   addCertification: () => void
-  updateCertification: (id: string, data: CV["certifications"][0]) => void
+  updateCertification: (id: string, data: CV["certifications"][number]) => void
   removeCertification: (id: string) => void
+  duplicateCertification: (id: string) => void
+  moveCertification: (id: string, direction: Direction) => void
+
   addLanguage: () => void
-  updateLanguage: (id: string, data: CV["languages"][0]) => void
+  updateLanguage: (id: string, data: CV["languages"][number]) => void
   removeLanguage: (id: string) => void
+  duplicateLanguage: (id: string) => void
+  moveLanguage: (id: string, direction: Direction) => void
+
   addReferee: () => void
-  updateReferee: (id: string, data: CV["referees"][0]) => void
+  updateReferee: (id: string, data: CV["referees"][number]) => void
   removeReferee: (id: string) => void
+  duplicateReferee: (id: string) => void
+  moveReferee: (id: string, direction: Direction) => void
+
   setTemplate: (templateId: TemplateId) => void
+  undo: () => void
+  redo: () => void
   resetCV: () => void
   loadSavedCVs: (cvs: CV[]) => void
   saveCV: (cv: CV) => void
@@ -42,290 +80,630 @@ interface CVStore {
 
 const generateId = () => Math.random().toString(36).substring(2, 15)
 
-export const useCVStore = create<CVStore>((set) => ({
-  currentCV: createEmptyCV(),
-  savedCVs: [],
-  currentTemplate: "modern",
+const nowIso = () => new Date().toISOString()
 
-  setCurrentCV: (cv) => set({ currentCV: cv }),
+function updateTimestamp<T extends CV>(cv: T): T {
+  return {
+    ...cv,
+    updatedAt: nowIso(),
+  }
+}
 
-  updatePersonalInfo: (data) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        personalInfo: data,
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+function duplicateById<T extends WithId>(items: T[], id: string): T[] {
+  const index = items.findIndex((item) => item.id === id)
+  if (index < 0) {
+    return items
+  }
 
-  updateSummary: (summary) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        summary,
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+  const item = items[index]
+  const duplicate = { ...item, id: generateId() }
+  return [...items.slice(0, index + 1), duplicate, ...items.slice(index + 1)]
+}
 
-  addExperience: () =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        experience: [
-          ...state.currentCV.experience,
-          {
-            id: generateId(),
-            company: "",
-            position: "",
-            startDate: "",
-            endDate: "",
-            current: false,
-            description: "",
-          },
-        ],
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+function moveById<T extends WithId>(items: T[], id: string, direction: Direction): T[] {
+  const index = items.findIndex((item) => item.id === id)
+  if (index < 0) {
+    return items
+  }
 
-  updateExperience: (id, data) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        experience: state.currentCV.experience.map((exp) =>
-          exp.id === id ? data : exp
-        ),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+  const nextIndex = direction === "up" ? index - 1 : index + 1
+  if (nextIndex < 0 || nextIndex >= items.length) {
+    return items
+  }
 
-  removeExperience: (id) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        experience: state.currentCV.experience.filter((exp) => exp.id !== id),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+  const copy = [...items]
+  ;[copy[index], copy[nextIndex]] = [copy[nextIndex], copy[index]]
+  return copy
+}
 
-  addEducation: () =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        education: [
-          ...state.currentCV.education,
-          {
-            id: generateId(),
-            institution: "",
-            degree: "",
-            field: "",
-            startDate: "",
-            endDate: "",
-            current: false,
-          },
-        ],
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+function setHistoryState(
+  state: CVStore,
+  nextCV: CV,
+  options?: { recordHistory?: boolean }
+): Partial<CVStore> {
+  const recordHistory = options?.recordHistory ?? true
 
-  updateEducation: (id, data) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        education: state.currentCV.education.map((edu) =>
-          edu.id === id ? data : edu
-        ),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+  if (!recordHistory) {
+    return {
+      currentCV: nextCV,
+      currentTemplate: nextCV.templateId,
+      undoStack: [],
+      redoStack: [],
+      canUndo: false,
+      canRedo: false,
+    }
+  }
 
-  removeEducation: (id) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        education: state.currentCV.education.filter((edu) => edu.id !== id),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+  const undoStack = [...state.undoStack, state.currentCV].slice(-HISTORY_LIMIT)
+  return {
+    currentCV: nextCV,
+    currentTemplate: nextCV.templateId,
+    undoStack,
+    redoStack: [],
+    canUndo: undoStack.length > 0,
+    canRedo: false,
+  }
+}
 
-  addSkill: () =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        skills: [
-          ...state.currentCV.skills,
-          {
-            id: generateId(),
-            name: "",
-            level: "intermediate",
-            category: "technical",
-          },
-        ],
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+export const useCVStore = create<CVStore>((set) => {
+  return {
+    currentCV: createEmptyCV(),
+    savedCVs: [],
+    currentTemplate: "modern",
+    undoStack: [],
+    redoStack: [],
+    canUndo: false,
+    canRedo: false,
 
-  updateSkill: (id, data) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        skills: state.currentCV.skills.map((skill) =>
-          skill.id === id ? data : skill
-        ),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    setCurrentCV: (cv) =>
+      set((state) => {
+        const nextCV: CV = {
+          ...cv,
+          updatedAt: cv.updatedAt || nowIso(),
+          createdAt: cv.createdAt || nowIso(),
+        }
+        return setHistoryState(state, nextCV, { recordHistory: false })
+      }),
 
-  removeSkill: (id) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        skills: state.currentCV.skills.filter((skill) => skill.id !== id),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    updatePersonalInfo: (data) =>
+      set((state) =>
+        setHistoryState(state, updateTimestamp({ ...state.currentCV, personalInfo: data }))
+      ),
 
-  addCertification: () =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        certifications: [
-          ...state.currentCV.certifications,
-          {
-            id: generateId(),
-            name: "",
-            issuer: "",
-            date: "",
-          },
-        ],
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    updateSummary: (summary) =>
+      set((state) =>
+        setHistoryState(state, updateTimestamp({ ...state.currentCV, summary }))
+      ),
 
-  updateCertification: (id, data) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        certifications: state.currentCV.certifications.map((cert) =>
-          cert.id === id ? data : cert
-        ),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    updatePresentation: (data) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            presentation: {
+              ...(state.currentCV.presentation ?? createEmptyCV().presentation!),
+              ...data,
+            },
+          })
+        )
+      ),
 
-  removeCertification: (id) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        certifications: state.currentCV.certifications.filter(
-          (cert) => cert.id !== id
-        ),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    updateTargeting: (data) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            targeting: {
+              ...(state.currentCV.targeting ?? createEmptyCV().targeting!),
+              ...data,
+            },
+          })
+        )
+      ),
 
-  addLanguage: () =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        languages: [
-          ...state.currentCV.languages,
-          {
-            id: generateId(),
-            language: "",
-            proficiency: "intermediate",
-          },
-        ],
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    moveSectionOrder: (sectionKey, direction) =>
+      set((state) => {
+        const presentation = state.currentCV.presentation ?? createEmptyCV().presentation!
+        const sectionOrder = moveById(
+          presentation.sectionOrder.map((key) => ({ id: key })),
+          sectionKey,
+          direction
+        ).map((item) => item.id as SectionKey)
 
-  updateLanguage: (id, data) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        languages: state.currentCV.languages.map((lang) =>
-          lang.id === id ? data : lang
-        ),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+        return setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            presentation: {
+              ...presentation,
+              sectionOrder,
+            },
+          })
+        )
+      }),
 
-  removeLanguage: (id) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        languages: state.currentCV.languages.filter((lang) => lang.id !== id),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    toggleSectionVisibility: (sectionKey) =>
+      set((state) => {
+        const presentation = state.currentCV.presentation ?? createEmptyCV().presentation!
+        const hiddenSections = presentation.hiddenSections.includes(sectionKey)
+          ? presentation.hiddenSections.filter((key) => key !== sectionKey)
+          : [...presentation.hiddenSections, sectionKey]
 
-  addReferee: () =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        referees: [
-          ...state.currentCV.referees,
-          {
-            id: generateId(),
-            name: "",
-            position: "",
-            company: "",
-            email: "",
-            phone: "",
-            relationship: "",
-          },
-        ],
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+        return setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            presentation: {
+              ...presentation,
+              hiddenSections,
+            },
+          })
+        )
+      }),
 
-  updateReferee: (id, data) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        referees: state.currentCV.referees.map((ref) =>
-          ref.id === id ? data : ref
-        ),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    addExperience: () =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            experience: [
+              ...state.currentCV.experience,
+              {
+                id: generateId(),
+                company: "",
+                position: "",
+                startDate: "",
+                endDate: "",
+                current: false,
+                description: "",
+              },
+            ],
+          })
+        )
+      ),
 
-  removeReferee: (id) =>
-    set((state) => ({
-      currentCV: {
-        ...state.currentCV,
-        referees: state.currentCV.referees.filter((ref) => ref.id !== id),
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    updateExperience: (id, data) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            experience: state.currentCV.experience.map((exp) => (exp.id === id ? data : exp)),
+          })
+        )
+      ),
 
-  setTemplate: (templateId) =>
-    set((state) => ({
-      currentTemplate: templateId,
-      currentCV: {
-        ...state.currentCV,
-        templateId,
-        updatedAt: new Date().toISOString(),
-      },
-    })),
+    removeExperience: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            experience: state.currentCV.experience.filter((exp) => exp.id !== id),
+          })
+        )
+      ),
 
-  resetCV: () => set({ currentCV: createEmptyCV() }),
+    duplicateExperience: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            experience: duplicateById(state.currentCV.experience, id),
+          })
+        )
+      ),
 
-  loadSavedCVs: (cvs) => set({ savedCVs: cvs }),
+    moveExperience: (id, direction) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            experience: moveById(state.currentCV.experience, id, direction),
+          })
+        )
+      ),
 
-  saveCV: (cv) =>
-    set((state) => {
-      const existingIndex = state.savedCVs.findIndex((c) => c.id === cv.id)
-      if (existingIndex >= 0) {
-        const updated = [...state.savedCVs]
-        updated[existingIndex] = cv
-        return { savedCVs: updated }
-      }
-      return { savedCVs: [...state.savedCVs, cv] }
-    }),
+    addEducation: () =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            education: [
+              ...state.currentCV.education,
+              {
+                id: generateId(),
+                institution: "",
+                degree: "",
+                field: "",
+                startDate: "",
+                endDate: "",
+                current: false,
+              },
+            ],
+          })
+        )
+      ),
 
-  deleteCV: (id) =>
-    set((state) => ({
-      savedCVs: state.savedCVs.filter((cv) => cv.id !== id),
-    })),
-}))
+    updateEducation: (id, data) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            education: state.currentCV.education.map((edu) => (edu.id === id ? data : edu)),
+          })
+        )
+      ),
+
+    removeEducation: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            education: state.currentCV.education.filter((edu) => edu.id !== id),
+          })
+        )
+      ),
+
+    duplicateEducation: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            education: duplicateById(state.currentCV.education, id),
+          })
+        )
+      ),
+
+    moveEducation: (id, direction) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            education: moveById(state.currentCV.education, id, direction),
+          })
+        )
+      ),
+
+    addSkill: () =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            skills: [
+              ...state.currentCV.skills,
+              {
+                id: generateId(),
+                name: "",
+                level: "intermediate",
+                category: "technical",
+              },
+            ],
+          })
+        )
+      ),
+
+    updateSkill: (id, data) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            skills: state.currentCV.skills.map((skill) => (skill.id === id ? data : skill)),
+          })
+        )
+      ),
+
+    removeSkill: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            skills: state.currentCV.skills.filter((skill) => skill.id !== id),
+          })
+        )
+      ),
+
+    duplicateSkill: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            skills: duplicateById(state.currentCV.skills, id),
+          })
+        )
+      ),
+
+    moveSkill: (id, direction) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            skills: moveById(state.currentCV.skills, id, direction),
+          })
+        )
+      ),
+
+    addCertification: () =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            certifications: [
+              ...state.currentCV.certifications,
+              {
+                id: generateId(),
+                name: "",
+                issuer: "",
+                date: "",
+              },
+            ],
+          })
+        )
+      ),
+
+    updateCertification: (id, data) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            certifications: state.currentCV.certifications.map((cert) =>
+              cert.id === id ? data : cert
+            ),
+          })
+        )
+      ),
+
+    removeCertification: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            certifications: state.currentCV.certifications.filter((cert) => cert.id !== id),
+          })
+        )
+      ),
+
+    duplicateCertification: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            certifications: duplicateById(state.currentCV.certifications, id),
+          })
+        )
+      ),
+
+    moveCertification: (id, direction) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            certifications: moveById(state.currentCV.certifications, id, direction),
+          })
+        )
+      ),
+
+    addLanguage: () =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            languages: [
+              ...state.currentCV.languages,
+              {
+                id: generateId(),
+                language: "",
+                proficiency: "intermediate",
+              },
+            ],
+          })
+        )
+      ),
+
+    updateLanguage: (id, data) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            languages: state.currentCV.languages.map((lang) => (lang.id === id ? data : lang)),
+          })
+        )
+      ),
+
+    removeLanguage: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            languages: state.currentCV.languages.filter((lang) => lang.id !== id),
+          })
+        )
+      ),
+
+    duplicateLanguage: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            languages: duplicateById(state.currentCV.languages, id),
+          })
+        )
+      ),
+
+    moveLanguage: (id, direction) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            languages: moveById(state.currentCV.languages, id, direction),
+          })
+        )
+      ),
+
+    addReferee: () =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            referees: [
+              ...state.currentCV.referees,
+              {
+                id: generateId(),
+                name: "",
+                position: "",
+                company: "",
+                email: "",
+                phone: "",
+                relationship: "",
+              },
+            ],
+          })
+        )
+      ),
+
+    updateReferee: (id, data) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            referees: state.currentCV.referees.map((ref) => (ref.id === id ? data : ref)),
+          })
+        )
+      ),
+
+    removeReferee: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            referees: state.currentCV.referees.filter((ref) => ref.id !== id),
+          })
+        )
+      ),
+
+    duplicateReferee: (id) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            referees: duplicateById(state.currentCV.referees, id),
+          })
+        )
+      ),
+
+    moveReferee: (id, direction) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            referees: moveById(state.currentCV.referees, id, direction),
+          })
+        )
+      ),
+
+    setTemplate: (templateId) =>
+      set((state) =>
+        setHistoryState(
+          state,
+          updateTimestamp({
+            ...state.currentCV,
+            templateId,
+          })
+        )
+      ),
+
+    undo: () =>
+      set((state) => {
+        if (state.undoStack.length === 0) {
+          return state
+        }
+
+        const previous = state.undoStack[state.undoStack.length - 1]
+        const undoStack = state.undoStack.slice(0, -1)
+        const redoStack = [...state.redoStack, state.currentCV].slice(-HISTORY_LIMIT)
+
+        return {
+          currentCV: previous,
+          currentTemplate: previous.templateId,
+          undoStack,
+          redoStack,
+          canUndo: undoStack.length > 0,
+          canRedo: redoStack.length > 0,
+        }
+      }),
+
+    redo: () =>
+      set((state) => {
+        if (state.redoStack.length === 0) {
+          return state
+        }
+
+        const next = state.redoStack[state.redoStack.length - 1]
+        const redoStack = state.redoStack.slice(0, -1)
+        const undoStack = [...state.undoStack, state.currentCV].slice(-HISTORY_LIMIT)
+
+        return {
+          currentCV: next,
+          currentTemplate: next.templateId,
+          undoStack,
+          redoStack,
+          canUndo: undoStack.length > 0,
+          canRedo: redoStack.length > 0,
+        }
+      }),
+
+    resetCV: () =>
+      set((state) => {
+        const empty = createEmptyCV()
+        return setHistoryState(state, empty, { recordHistory: false })
+      }),
+
+    loadSavedCVs: (cvs) => set({ savedCVs: cvs }),
+
+    saveCV: (cv) =>
+      set((state) => {
+        const existingIndex = state.savedCVs.findIndex((c) => c.id === cv.id)
+        if (existingIndex >= 0) {
+          const updated = [...state.savedCVs]
+          updated[existingIndex] = cv
+          return { savedCVs: updated }
+        }
+        return { savedCVs: [...state.savedCVs, cv] }
+      }),
+
+    deleteCV: (id) =>
+      set((state) => ({
+        savedCVs: state.savedCVs.filter((cv) => cv.id !== id),
+      })),
+  }
+})

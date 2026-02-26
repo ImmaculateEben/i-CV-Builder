@@ -1,17 +1,14 @@
 "use client"
 
-import { useForm, useFieldArray } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { workExperienceSchema, WorkExperienceInput } from "@/lib/schemas"
+import { useFieldArray, useForm, useWatch } from "react-hook-form"
+import { WorkExperienceInput } from "@/lib/schemas"
 import { useCVStore } from "@/store/cv-store"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Plus, Trash2, Briefcase } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 interface ExperienceFormProps {
   onNext?: () => void
@@ -19,14 +16,13 @@ interface ExperienceFormProps {
 }
 
 export function ExperienceForm({ onNext, onPrevious }: ExperienceFormProps) {
-  const { currentCV, addExperience, updateExperience, removeExperience } = useCVStore()
+  const { currentCV, updateExperience } = useCVStore()
   const { experience } = currentCV
 
   const {
     register,
     control,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm<{ experience: WorkExperienceInput[] }>({
     defaultValues: {
@@ -39,7 +35,11 @@ export function ExperienceForm({ onNext, onPrevious }: ExperienceFormProps) {
     name: "experience",
   })
 
-  const watchCurrent = watch("experience")
+  const watchCurrent = useWatch({
+    control,
+    name: "experience",
+    defaultValue: [],
+  })
 
   const onSubmit = () => {
     // Update store with each experience entry

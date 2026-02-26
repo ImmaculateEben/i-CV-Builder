@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { sectionKeys, templateIds } from "@/types/cv"
 
 // Personal Information Schema
 export const personalInfoSchema = z.object({
@@ -69,10 +70,32 @@ export const refereeSchema = z.object({
   relationship: z.string().max(100).default(""),
 })
 
+export const cvPresentationSchema = z.object({
+  sectionOrder: z.array(z.enum(sectionKeys)).default([...sectionKeys]),
+  hiddenSections: z.array(z.enum(sectionKeys)).default([]),
+  density: z.enum(["comfortable", "compact"]).default("comfortable"),
+  fontScale: z.enum(["sm", "md", "lg"]).default("md"),
+  accentVariant: z.string().optional().or(z.literal("")),
+})
+
+export const cvTargetingSchema = z.object({
+  targetRole: z.string().default(""),
+  targetCompany: z.string().default(""),
+  jobDescription: z.string().default(""),
+  extractedKeywords: z.array(z.string()).default([]),
+  emphasisSections: z.array(z.enum(sectionKeys)).default([]),
+})
+
+export const cvVariantMetaSchema = z.object({
+  baseCvId: z.string().optional().or(z.literal("")),
+  variantLabel: z.string().optional().or(z.literal("")),
+  sourceTemplateId: z.enum(templateIds).optional(),
+})
+
 // Full CV Schema
 export const cvSchema = z.object({
   id: z.string(),
-  templateId: z.string(),
+  templateId: z.enum(templateIds),
   personalInfo: personalInfoSchema,
   summary: z.string().max(2000).optional().or(z.literal("")),
   experience: z.array(workExperienceSchema),
@@ -81,6 +104,9 @@ export const cvSchema = z.object({
   certifications: z.array(certificationSchema),
   languages: z.array(languageSchema),
   referees: z.array(refereeSchema),
+  presentation: cvPresentationSchema.optional(),
+  targeting: cvTargetingSchema.optional(),
+  variantMeta: cvVariantMetaSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

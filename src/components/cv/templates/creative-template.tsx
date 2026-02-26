@@ -1,126 +1,220 @@
-import { CV } from "@/types/cv"
+import type { CV } from "@/types/cv"
+import {
+  capitalize,
+  fallbackDescriptionLines,
+  formatDateRange,
+  getContactItems,
+  getFullName,
+  getLinkItems,
+  groupSkills,
+} from "./template-utils"
 
 interface CreativeTemplateProps {
   cv: CV
 }
 
 export function CreativeTemplate({ cv }: CreativeTemplateProps) {
-  const { personalInfo, summary, experience, education, skills, languages } = cv
+  const { summary, experience, education, skills, languages, certifications } = cv
+  const groupedSkills = groupSkills(skills)
+  const contactItems = getContactItems(cv)
+  const links = getLinkItems(cv)
 
   return (
-    <div className="max-w-[800px] mx-auto bg-white text-gray-900 p-0 shadow-lg overflow-hidden">
-      {/* Header with Color Block */}
-      <div className="bg-gradient-to-r from-purple-600 to-pink-500 p-8 text-white">
-        <h1 className="text-4xl font-bold">
-          {personalInfo.firstName} <span className="font-light">{personalInfo.lastName}</span>
-        </h1>
-        <div className="flex flex-wrap gap-4 mt-4 text-white/90 text-sm">
-          <span>✉ {personalInfo.email}</span>
-          <span>📱 {personalInfo.phone}</span>
-          <span>📍 {personalInfo.address}</span>
-        </div>
-        <div className="flex gap-4 mt-2 text-sm">
-          {personalInfo.linkedIn && <span>🔗 {personalInfo.linkedIn}</span>}
-          {personalInfo.portfolioUrl && <span>🌐 {personalInfo.portfolioUrl}</span>}
-        </div>
-      </div>
+    <div className="mx-auto max-w-[800px] overflow-hidden rounded-2xl border border-rose-200 bg-white text-slate-900 shadow-lg shadow-rose-200/40">
+      <header className="relative overflow-hidden bg-gradient-to-br from-rose-500 via-orange-400 to-amber-300 p-8 text-white">
+        <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/20 blur-2xl" />
+        <div className="absolute -bottom-12 left-24 h-40 w-40 rounded-full bg-fuchsia-500/20 blur-3xl" />
 
-      <div className="p-8">
-        {/* Summary */}
-        {summary && (
-          <section className="mb-6">
-            <h2 className="text-lg font-bold text-purple-600 mb-3 flex items-center gap-2">
-              <span className="w-3 h-3 bg-purple-600 rounded-full"></span>
-              About Me
-            </h2>
-            <p className="text-gray-700 leading-relaxed">{summary}</p>
-          </section>
-        )}
+        <div className="relative">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/90">
+            Creative Profile
+          </p>
+          <h1 className="text-4xl font-bold tracking-tight">
+            {getFullName(cv)}
+          </h1>
 
-        {/* Experience */}
-        {experience.length > 0 && (
-          <section className="mb-6">
-            <h2 className="text-lg font-bold text-purple-600 mb-3 flex items-center gap-2">
-              <span className="w-3 h-3 bg-purple-600 rounded-full"></span>
-              Experience
-            </h2>
-            <div className="space-y-4">
-              {experience.map((exp) => (
-                <div key={exp.id} className="relative pl-4 border-l-2 border-purple-200">
-                  <div className="absolute -left-1.5 top-0 w-3 h-3 bg-purple-500 rounded-full"></div>
-                  <h3 className="font-bold text-gray-900">{exp.position}</h3>
-                  <p className="text-purple-600 font-medium">{exp.company}</p>
-                  <p className="text-sm text-gray-500 mb-1">
-                    {exp.startDate} - {exp.current ? "Present" : exp.endDate}
-                  </p>
-                  {exp.description && (
-                    <p className="text-gray-700 text-sm">{exp.description}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Education */}
-        {education.length > 0 && (
-          <section className="mb-6">
-            <h2 className="text-lg font-bold text-purple-600 mb-3 flex items-center gap-2">
-              <span className="w-3 h-3 bg-purple-600 rounded-full"></span>
-              Education
-            </h2>
-            <div className="space-y-3">
-              {education.map((edu) => (
-                <div key={edu.id} className="relative pl-4 border-l-2 border-purple-200">
-                  <div className="absolute -left-1.5 top-0 w-3 h-3 bg-purple-500 rounded-full"></div>
-                  <h3 className="font-bold text-gray-900">{edu.degree} in {edu.field}</h3>
-                  <p className="text-purple-600">{edu.institution}</p>
-                  <p className="text-sm text-gray-500">
-                    {edu.startDate} - {edu.current ? "Present" : edu.endDate}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Skills */}
-        {skills.length > 0 && (
-          <section className="mb-6">
-            <h2 className="text-lg font-bold text-purple-600 mb-3 flex items-center gap-2">
-              <span className="w-3 h-3 bg-purple-600 rounded-full"></span>
-              Skills
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {skills.map((skill) => (
+          {contactItems.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {contactItems.map((item) => (
                 <span
-                  key={skill.id}
-                  className="px-3 py-1 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 text-sm font-medium rounded-full"
+                  key={item}
+                  className="rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur"
                 >
-                  {skill.name}
+                  {item}
                 </span>
               ))}
             </div>
-          </section>
-        )}
+          )}
 
-        {/* Languages */}
-        {languages.length > 0 && (
-          <section>
-            <h2 className="text-lg font-bold text-purple-600 mb-3 flex items-center gap-2">
-              <span className="w-3 h-3 bg-purple-600 rounded-full"></span>
-              Languages
-            </h2>
-            <div className="flex flex-wrap gap-4">
-              {languages.map((lang) => (
-                <div key={lang.id} className="text-center">
-                  <span className="font-bold text-gray-900">{lang.language}</span>
-                  <p className="text-xs text-gray-500 capitalize">{lang.proficiency}</p>
-                </div>
+          {links.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {links.map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-rose-600 shadow"
+                >
+                  {item.label}
+                </a>
               ))}
             </div>
-          </section>
-        )}
+          )}
+        </div>
+      </header>
+
+      <div className="grid gap-8 p-8 md:grid-cols-[1.45fr_1fr]">
+        <div className="space-y-7">
+          {summary.trim() && (
+            <section>
+              <h2 className="mb-3 inline-flex items-center rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">
+                About Me
+              </h2>
+              <p className="text-sm leading-6 text-slate-700">{summary}</p>
+            </section>
+          )}
+
+          {experience.length > 0 && (
+            <section>
+              <h2 className="mb-4 inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-orange-700">
+                Experience
+              </h2>
+              <div className="space-y-5">
+                {experience.map((exp) => {
+                  const lines = fallbackDescriptionLines(exp.description)
+
+                  return (
+                    <article key={exp.id} className="relative rounded-xl border border-rose-100 p-4">
+                      <div className="absolute left-0 top-4 h-12 w-1 rounded-r bg-gradient-to-b from-rose-500 to-orange-400" />
+                      <div className="pl-2">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:justify-between">
+                          <div>
+                            <h3 className="font-semibold text-slate-900">{exp.position}</h3>
+                            <p className="text-sm font-medium text-rose-600">{exp.company}</p>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            {formatDateRange(exp.startDate, exp.endDate, exp.current)}
+                          </p>
+                        </div>
+                        {lines.length > 0 && (
+                          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                            {lines.map((line, index) => (
+                              <li key={`${exp.id}-${index}`} className="flex gap-2">
+                                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" />
+                                <span>{line}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
+          {education.length > 0 && (
+            <section>
+              <h2 className="mb-4 inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-800">
+                Education
+              </h2>
+              <div className="space-y-4">
+                {education.map((edu) => (
+                  <article key={edu.id} className="rounded-xl bg-slate-50 p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="font-semibold text-slate-900">
+                          {edu.degree}
+                          {edu.field.trim() ? `, ${edu.field}` : ""}
+                        </h3>
+                        <p className="text-sm text-slate-600">{edu.institution}</p>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {formatDateRange(edu.startDate, edu.endDate, edu.current)}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <aside className="space-y-6">
+          {skills.length > 0 && (
+            <section className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">
+                Skills
+              </h2>
+              <div className="space-y-3">
+                {groupedSkills.technical.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-slate-500">Technical</p>
+                    <div className="flex flex-wrap gap-2">
+                      {groupedSkills.technical.map((skill) => (
+                        <span
+                          key={skill.id}
+                          className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700"
+                        >
+                          {skill.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {groupedSkills.soft.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-slate-500">Soft</p>
+                    <p className="text-sm leading-6 text-slate-700">
+                      {groupedSkills.soft.map((skill) => skill.name).join(", ")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {certifications.length > 0 && (
+            <section className="rounded-2xl border border-orange-100 bg-orange-50/60 p-4">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">
+                Certifications
+              </h2>
+              <div className="space-y-2 text-sm">
+                {certifications.map((cert) => (
+                  <div key={cert.id}>
+                    <p className="font-semibold text-slate-900">{cert.name}</p>
+                    <p className="text-slate-600">
+                      {cert.issuer}
+                      {cert.date ? ` • ${cert.date}` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {languages.length > 0 && (
+            <section className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-800">
+                Languages
+              </h2>
+              <div className="space-y-2">
+                {languages.map((lang) => (
+                  <div
+                    key={lang.id}
+                    className="flex items-center justify-between rounded-lg bg-white/80 px-3 py-2"
+                  >
+                    <span className="text-sm font-medium text-slate-800">{lang.language}</span>
+                    <span className="text-xs text-slate-500">{capitalize(lang.proficiency)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </aside>
       </div>
     </div>
   )

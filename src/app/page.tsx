@@ -59,7 +59,8 @@ export default function HomePage() {
                   </div>
                   <h3 className="text-xl font-semibold mb-2">Beautiful Templates</h3>
                   <p className="text-muted-foreground">
-                    Choose from 4 professionally designed templates - Modern, Professional, Creative, and Nigerian regional format.
+                    Choose from 7 professionally designed templates, including Modern, Professional, Creative,
+                    Nigerian, Minimal, Executive, and Tech layouts.
                   </p>
                 </CardContent>
               </Card>
@@ -71,7 +72,7 @@ export default function HomePage() {
                   </div>
                   <h3 className="text-xl font-semibold mb-2">PDF Export</h3>
                   <p className="text-muted-foreground">
-                    Download your CV as a high-quality PDF that's ready to send to employers.
+                    Download your CV as a high-quality PDF that&apos;s ready to send to employers.
                   </p>
                 </CardContent>
               </Card>
@@ -134,7 +135,7 @@ export default function HomePage() {
               Ready to Create Your CV?
             </h2>
             <p className="text-xl text-muted-foreground mb-8">
-              Start building your professional resume today - it's free!
+              Start building your professional resume today - it&apos;s free!
             </p>
             <Link href="/register">
               <Button size="lg" className="text-lg px-8">

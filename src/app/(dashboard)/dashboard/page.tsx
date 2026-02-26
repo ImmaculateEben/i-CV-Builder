@@ -4,31 +4,39 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase"
+import { deleteCVRecord, listCVs, type CVListItem } from "@/lib/cv-repository"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, FileText, Trash2, LogOut } from "lucide-react"
 
-interface CV {
-  id: string
-  template_id: string
-  created_at: string
-  updated_at: string
-}
-
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [cvs, setCvs] = useState<CV[]>([])
+  const [cvs, setCvs] = useState<CVListItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  async function fetchCVs() {
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
+    setCvs(await listCVs())
+
+    setLoading(false)
+  }
 
   useEffect(() => {
     const supabase = createClient()
     
     // Check current user
     supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user)
       if (!user) {
         router.push("/login")
       } else {
@@ -36,24 +44,6 @@ export default function DashboardPage() {
       }
     })
   }, [router])
-
-  const fetchCVs = async () => {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (user) {
-      const { data } = await supabase
-        .from("cvs")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("updated_at", { ascending: false })
-      
-      if (data) {
-        setCvs(data)
-      }
-    }
-    setLoading(false)
-  }
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -63,9 +53,8 @@ export default function DashboardPage() {
   }
 
   const deleteCV = async (id: string) => {
-    const supabase = createClient()
-    await supabase.from("cvs").delete().eq("id", id)
-    setCvs(cvs.filter((cv) => cv.id !== id))
+    await deleteCVRecord(id)
+    setCvs((prev) => prev.filter((cv) => cv.id !== id))
   }
 
   if (loading) {
@@ -124,10 +113,10 @@ export default function DashboardPage() {
                 <Card key={cv.id} className="hover:shadow-md transition-shadow">
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
-                      <span className="capitalize">{cv.template_id} CV</span>
+                      <span className="capitalize">{cv.title || `${cv.templateId} CV`}</span>
                     </CardTitle>
                     <CardDescription>
-                      Created: {new Date(cv.created_at).toLocaleDateString()}
+                      Created: {new Date(cv.createdAt).toLocaleDateString()}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex gap-2">

@@ -3,6 +3,7 @@
 import React from "react"
 import { useForm } from "react-hook-form"
 import { useCVStore } from "@/store/cv-store"
+import type { CV } from "@/types/cv"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -21,11 +22,11 @@ export function PersonalInfoForm({ onNext }: PersonalInfoFormProps): React.JSX.E
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm({
+  } = useForm<CV["personalInfo"]>({
     defaultValues: personalInfo,
   })
 
-  const onSubmit = (data: any) => {
+  const onSubmit = (data: CV["personalInfo"]) => {
     updatePersonalInfo(data)
     onNext?.()
   }

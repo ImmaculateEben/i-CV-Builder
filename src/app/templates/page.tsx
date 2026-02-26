@@ -1,167 +1,122 @@
-"use client"
-
-import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { templates } from "@/types/cv"
-import { Check, Layout, Briefcase, Palette, Globe } from "lucide-react"
-
-const templateIcons = {
-  modern: Layout,
-  professional: Briefcase,
-  creative: Palette,
-  nigerian: Globe,
-}
-
-const templateColors = {
-  modern: "bg-blue-500",
-  professional: "bg-gray-700",
-  creative: "bg-gradient-to-r from-purple-500 to-pink-500",
-  nigerian: "bg-green-600",
-}
+import {
+  CVTemplatePreview,
+  cvTemplateRegistry,
+} from "@/components/cv/templates/registry"
+import { Check, Layout, Globe } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export default function TemplatesPage() {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="animate-pulse">Loading...</div>
-        </main>
-        <Footer />
-      </div>
-    )
-  }
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      
+
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="py-12 sm:py-16 bg-gradient-to-b from-background to-muted">
+        <section className="relative overflow-hidden py-14 sm:py-18">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.08),transparent_55%),radial-gradient(circle_at_90%_20%,rgba(16,185,129,0.08),transparent_50%)]" />
           <div className="container mx-auto px-4 text-center">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">Choose Your Perfect Template</h1>
-            <p className="text-base sm:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Browse our collection of professionally designed CV templates. 
-              All templates are optimized for ATS and ready to use.
+            <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+              Choose Your CV Template
+            </h1>
+            <p className="mx-auto max-w-2xl text-base text-muted-foreground sm:text-lg">
+              Seven polished templates for corporate, creative, regional, executive, and technical roles.
+              Switch layouts anytime without re-entering your information.
             </p>
           </div>
         </section>
 
-        {/* Templates Grid */}
-        <section className="py-12 sm:py-16">
+        <section className="py-10 sm:py-14">
           <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {templates.map((template) => {
-                const Icon = templateIcons[template.id]
-                
-                return (
-                  <div 
-                    key={template.id}
-                    className="group relative rounded-xl border bg-card overflow-hidden hover:shadow-lg transition-all"
-                  >
-                    {/* Template Preview */}
-                    <div className="aspect-[3/4] bg-gray-100 p-4 flex items-center justify-center">
-                      <div className="w-full max-w-[180px] transform scale-75 origin-center">
-                        {template.id === "modern" && (
-                          <div className="bg-white p-3 text-xs shadow">
-                            <div className="border-b-2 border-blue-600 pb-2 mb-2">
-                              <h1 className="text-lg font-bold">John Doe</h1>
-                              <p className="text-gray-500">john@email.com</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-[8px] text-gray-400">SUMMARY</p>
-                              <p className="text-[8px]">Professional summary...</p>
-                            </div>
-                          </div>
-                        )}
-                        {template.id === "professional" && (
-                          <div className="bg-white p-3 text-xs shadow">
-                            <div className="text-center border-b pb-2 mb-2">
-                              <h1 className="text-lg font-serif font-bold uppercase">John Doe</h1>
-                              <p className="text-gray-500 text-[8px]">john@email.com</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-[8px] font-serif font-bold">SUMMARY</p>
-                              <p className="text-[8px]">Professional summary...</p>
-                            </div>
-                          </div>
-                        )}
-                        {template.id === "creative" && (
-                          <div className="bg-gradient-to-r from-purple-600 to-pink-500 p-1 text-xs">
-                            <div className="bg-white p-2">
-                              <h1 className="text-lg font-bold text-purple-600">John Doe</h1>
-                              <p className="text-[8px] text-gray-600">john@email.com</p>
-                            </div>
-                          </div>
-                        )}
-                        {template.id === "nigerian" && (
-                          <div className="bg-green-700 p-2 text-xs">
-                            <h1 className="text-lg font-bold text-white">John Doe</h1>
-                            <p className="text-green-100 text-[8px]">Lagos, Nigeria</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {cvTemplateRegistry.map((template) => {
+                const Icon = template.icon
 
-                    {/* Template Info */}
-                    <div className="p-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${templateColors[template.id]}`}>
-                        <Icon className="h-5 w-5 text-white" />
+                return (
+                  <article
+                    key={template.id}
+                    className="group overflow-hidden rounded-2xl border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    <CVTemplatePreview templateId={template.id} className="rounded-none border-0" scale={0.2} />
+
+                    <div className="border-t p-5">
+                      <div className="mb-3 flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              "flex h-10 w-10 items-center justify-center rounded-lg text-white",
+                              template.accentClassName
+                            )}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h2 className="font-semibold">{template.name}</h2>
+                            <span
+                              className={cn(
+                                "mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                                template.chipClassName
+                              )}
+                            >
+                              {template.category}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <h3 className="font-semibold text-lg mb-1">{template.name}</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        {template.description}
-                      </p>
-                      <Link href="/editor">
-                        <Button className="w-full">Use Template</Button>
-                      </Link>
+
+                      <p className="mb-4 text-sm text-muted-foreground">{template.description}</p>
+
+                      <div className="flex gap-2">
+                        <Link href={`/editor?template=${template.id}`} className="flex-1">
+                          <Button className="w-full">Use Template</Button>
+                        </Link>
+                        <Link href={`/editor?template=${template.id}`} className="flex-1">
+                          <Button variant="outline" className="w-full">
+                            Preview in Editor
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
-                  </div>
+                  </article>
                 )
               })}
             </div>
           </div>
         </section>
 
-        {/* Features Section */}
-        <section className="py-16 bg-muted">
+        <section className="bg-muted/50 py-16">
           <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-12">Why Our Templates?</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Check className="h-8 w-8 text-primary" />
+            <h2 className="mb-10 text-center text-2xl font-bold sm:text-3xl">Why These Templates Work</h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <div className="rounded-xl border bg-card p-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                  <Check className="h-7 w-7 text-primary" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">ATS Optimized</h3>
-                <p className="text-muted-foreground">
-                  All templates are designed to pass through Applicant Tracking Systems
+                <h3 className="mb-2 font-semibold">ATS-Friendly Structure</h3>
+                <p className="text-sm text-muted-foreground">
+                  Clear headings, readable hierarchy, and recruiter-friendly layouts across all templates.
                 </p>
               </div>
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Layout className="h-8 w-8 text-primary" />
+
+              <div className="rounded-xl border bg-card p-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                  <Layout className="h-7 w-7 text-primary" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">Easy to Customize</h3>
-                <p className="text-muted-foreground">
-                  Simple drag-and-drop interface makes customization a breeze
+                <h3 className="mb-2 font-semibold">Flexible Styling</h3>
+                <p className="text-sm text-muted-foreground">
+                  Move from conservative to expressive designs without changing your content or section order.
                 </p>
               </div>
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Globe className="h-8 w-8 text-primary" />
+
+              <div className="rounded-xl border bg-card p-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                  <Globe className="h-7 w-7 text-primary" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">PDF Export</h3>
-                <p className="text-muted-foreground">
-                  Export to PDF with perfect formatting every time
+                <h3 className="mb-2 font-semibold">Regional + Role Fit</h3>
+                <p className="text-sm text-muted-foreground">
+                  Includes Nigerian format support, executive styling, and a technical template for developers.
                 </p>
               </div>
             </div>
