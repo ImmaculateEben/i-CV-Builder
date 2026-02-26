@@ -3,7 +3,8 @@ import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { CVTemplatePreview } from "@/components/cv/templates/registry"
+import { CVTemplatePreview, cvTemplateRegistry } from "@/components/cv/templates/registry"
+import { cn } from "@/lib/utils"
 import { FileText, Download, Palette, Zap, Shield, Users } from "lucide-react"
 
 export default function HomePage() {
@@ -114,6 +115,45 @@ export default function HomePage() {
                     scaleClassName="scale-[0.24] sm:scale-[0.28] md:scale-[0.31]"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-2xl border bg-card p-4 shadow-sm">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">All Templates</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Browse all {cvTemplateRegistry.length} templates from the homepage.
+                  </p>
+                </div>
+                <Link href="/templates">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                    View Template Gallery
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+                {cvTemplateRegistry.map((template) => (
+                  <Link
+                    key={template.id}
+                    href={`/editor?template=${template.id}`}
+                    className="group rounded-xl border bg-background p-2 transition hover:border-primary/40 hover:shadow-sm"
+                  >
+                    <CVTemplatePreview
+                      templateId={template.id}
+                      className={cn(
+                        "rounded-lg border aspect-[4/5]",
+                        template.id === "tech" ? "bg-slate-900/70" : "bg-slate-100"
+                      )}
+                      scaleClassName="scale-[0.17] sm:scale-[0.19] xl:scale-[0.18]"
+                    />
+                    <div className="pt-2">
+                      <p className="truncate text-xs font-medium">{template.name}</p>
+                      <p className="truncate text-[10px] text-muted-foreground">{template.category}</p>
+                    </div>
+                  </Link>
+                ))}
               </div>
             </div>
           </div>

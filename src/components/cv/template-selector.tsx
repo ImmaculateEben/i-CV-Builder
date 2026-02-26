@@ -41,6 +41,9 @@ export function TemplateSelector({ onSelect, mode = "apply" }: TemplateSelectorP
             ? "Select a template to create a new draft clone while keeping your current CV content."
             : "Switch anytime. Your data stays the same while the layout changes."}
         </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Showing {cvTemplateRegistry.length} templates.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

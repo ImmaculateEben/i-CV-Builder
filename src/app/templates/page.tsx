@@ -22,7 +22,7 @@ export default function TemplatesPage() {
               Choose Your CV Template
             </h1>
             <p className="mx-auto max-w-2xl text-base text-muted-foreground sm:text-lg">
-              Seven polished templates for corporate, creative, regional, executive, and technical roles.
+              {cvTemplateRegistry.length} polished templates for corporate, creative, regional, executive, and technical roles.
               Switch layouts anytime without re-entering your information.
             </p>
           </div>
@@ -32,7 +32,7 @@ export default function TemplatesPage() {
           <div className="container mx-auto px-4">
             <div className="mb-6 flex flex-wrap items-center justify-center gap-2 text-xs sm:text-sm">
               <span className="rounded-full border bg-background px-3 py-1 font-medium">
-                7 templates
+                {cvTemplateRegistry.length} templates
               </span>
               <span className="rounded-full border bg-background px-3 py-1">
                 Responsive previews
